@@ -1,0 +1,73 @@
+h1 {
+  background: #969696;
+  border: solid 1px;
+  margin: 15px 5px 5px;
+  padding-left: 0.2em;
+}
+fieldset {
+  margin: 10px 5px;
+  border: solid 1px;
+  border-radius: 4px;
+  -moz-border-radius: 4px;
+  -webkit-border-radius: 4px;
+  -khtml-border-radius: 4px;
+}
+select {
+  padding: 3px;
+}
+button, input[type="submit"] {
+  padding: 5px;
+}
+td.fill {
+  height: 100%;
+}
+td.fill button, td.fill input, td.fill select {
+  width: 100%;
+}
+td.fill input[type="range"] {
+  vertical-align: middle;
+  width: 98%;
+}
+td.fill textarea {
+  width: 100%;
+  height: 100%;
+}
+table.fixed {
+  table-layout: fixed;
+}
+table.fixed td {
+  height: 1.6em;
+}
+table.fixed td.fill {
+  height: 100%;
+}
+td.disabled {
+  color: #aaa;
+}
+.center {
+  text-align: center;
+}
+table.center {
+  margin-left: auto;
+  margin-right: auto;
+}
+button:disabled img {
+  filter: opacity(0.3);
+}
+.popup {
+  display: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.7);
+}
+.toplevel {
+  display: relative;
+  margin: 10em auto;
+  background-color:#efefef;
+  opacity:1;
+  padding: 12px;
+  border: solid #618DC4 3px;
+}

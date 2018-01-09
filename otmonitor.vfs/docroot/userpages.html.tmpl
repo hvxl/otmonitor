@@ -1,0 +1,54 @@
+%# -*- html -*-
+% global theme
+<html>
+<head>
+<title>Custom web pages</title>
+<link rel="stylesheet" type="text/css" href="$theme.css">
+</head>
+<body>
+<div id="section">
+<h1>Custom web pages</h1>
+<div>
+It is possible to add your own web pages to the otmonitor web server or
+override built-in pages by placing them in a directory called <i>html</i>
+located in the same directory as the otmonitor binary.
+
+<h2>Style sheet</h2>
+To give custom pages a similar appearence as the built-in pages, the
+otmonitor.css file may be used as a style sheet. That file picks up the
+selected web theme.
+
+<h2>Web theme</h2>
+To create your own web theme, create a file called theme-&lt;name&gt;.css in
+the <i>html</i> directory.
+
+<h2>Web sockets</h2>
+You can use websockets in your customized web pages. Currently the following
+websockets are available:
+<dl>
+<dt>status.ws
+<dd>Reports updates to the information shown on the status screen in JSON
+format.
+<dt>upgrade.ws
+<dd>Reports the progress of a firmware update in JSON format.
+<dt>message.ws
+<dd>Reports every opentherm message reported by the gateway, including a
+timestamp, the hex message, and a translation to human readable form.
+</dl>
+
+<h2>Commands</h2>
+The special page <i>command</i> can be used to send a serial command to the
+gateway. Either use a "GET" or "POST" operation, specifying the desired
+command as query data. The request will return the response from the gateway.
+<dl>
+<dt>Example:
+<dd>The request
+<a href="command?PR=C">http://[dict get $header host]/command?PR=C</a>
+produces: PR: C=4 MHz
+</dl>
+
+</div>
+</div>
+[include footer.inc]
+</body>
+</html>

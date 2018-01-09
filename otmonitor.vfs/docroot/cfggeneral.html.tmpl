@@ -1,0 +1,43 @@
+% global gwmode
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": "gwmode"};
+var learn = "GW";
+</script>
+<script src="status.js"></script>
+</head>
+<body>
+<h1>Miscellaneous</h1>
+<fieldset>
+<legend>Operating mode</legend>
+<table width="100%">
+<tr>
+<td width="*" id="gwmode">[get gwmode "Gateway mode"]</td>
+<td width="10%" class="fill">
+<button onclick="command('GW=1')">Gateway</button>
+</td>
+<td width="10%" class="fill">
+<button onclick="command('GW=0')">Monitor</button>
+</td>
+</tr>
+</table>
+</fieldset>
+<form onsubmit="return commandstr('command')">
+<fieldset>
+<legend>Free format command</legend>
+<table width="100%">
+<tr>
+<td width="*" class="fill">
+<input type="text" id="command">
+</td>
+<td style="width:4em;" class="fill">
+<input type="submit" value="Send">
+</td>
+</tr>
+</table>
+</fieldset>
+</form>
+</body>
+</html>

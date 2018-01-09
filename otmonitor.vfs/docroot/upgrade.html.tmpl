@@ -1,0 +1,94 @@
+% global theme
+<html>
+<head>
+<title>Firmware upgrade</title>
+<link rel="stylesheet" type="text/css" href="$theme.css">
+</head>
+<body>
+<div id="section">
+<h1>Firmware upgrade</h1>
+% set cpct 0
+% set dpct 0
+% set name "&nbsp;"
+% set status "Please select a firmware file"
+% set prog disabled
+% set xfer disabled
+% if {[dict exists $state request post hexdata]} {
+%   set hexdata [dict get $state request post hexdata {}]
+%   lassign [upgrade parsehex [string map [list \r\n \n] $hexdata]] rc arg
+%   if {$rc eq "success"} {
+%     global csize dsize
+%     set cpct [expr {100 * $csize / 4096}]
+%     set dpct [expr {100 * $dsize / 256}]
+%     set prog enabled
+%     if {$arg} {set xfer enabled}
+%     set status "Click 'Program' to download the firmware"
+%   } else {
+%     set status $arg
+%   }
+%   set name [dict get $state request post hexdata content-disposition filename]
+% }
+<div id="dialog">
+<form method="POST" enctype="multipart/form-data" id="filesel">
+<table class="dialog">
+<colgroup><col width="120em">
+<colgroup><col width="*">
+<colgroup><col width="10em">
+<tr>
+<td>File&nbsp;name:</td>
+<td class="field">$name</td>
+<td><input id="file" type="file" name="hexdata" onchange="filesel.submit()"></td>
+</tr>
+</table>
+</form>
+<form method="POST">
+<table class="dialog">
+<colgroup><col width="120em">
+<colgroup><col width="*">
+<colgroup><col width="50em">
+<tr>
+<td></td>
+<td>
+<input type="checkbox" id="xfer" name="xfer" value="yes" checked="checked" $xfer>
+<label for="xfer">Transfer old EEPROM settings to the new firmware</label>
+</td>
+</tr>
+<tr>
+<td>Code&nbsp;memory:</td>
+<td class="progressbar">
+<div class="progressbar" style="width:$cpct%;">&nbsp;</div>
+</td>
+<td align="right">[format %d%% $cpct]</td>
+</tr>
+<tr>
+<td>Data&nbsp;memory:</td>
+<td class="progressbar">
+<div class="progressbar" style="width:$dpct%;">&nbsp;</div>
+</td>
+<td align="right">[format %d%% $dpct]</td>
+</tr>
+<tr>
+<td>Progress:</td>
+<td class="progressbar">
+<div id="progress" class="progressbar">&nbsp;</div>
+<td id="percent" align="right">0%</td>
+</tr>
+<tr>
+<td>Status:</td>
+<td colspan="2" id="status">$status</td>
+</tr>
+<tr>
+<td colspan="3" align="center">
+<input type="button" name="program" id="progbutton" value="Program" onclick="fwprog(this)" $prog>
+</td>
+</tr>
+</table>
+</form>
+</div>
+<br>
+</div>
+[include footer.inc]
+<!-- <div id="debug"></div> -->
+<script src="upgrade.js"></script>
+</body>
+</html>

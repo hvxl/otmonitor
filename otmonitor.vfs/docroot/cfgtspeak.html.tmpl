@@ -1,0 +1,77 @@
+% global cfg xlate
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": \["cfg", "tspeak::status"\]};
+function thingspeak(w) {
+    config('tspeak', 'enable', w.checked);
+    eval("tspeakserver");
+}
+</script>
+<script src="status.js"></script>
+</head>
+<body>
+<h1>ThingSpeak</h1>
+<fieldset>
+<legend>
+<input type="checkbox" id="tspeak,enable" [checked cfg(tspeak,enable)] onchange="thingspeak(this)">
+<label for="tspeak,enable">Enable ThingSpeak</label>
+</legend>
+<table width="100%">
+<colgroup>
+<col style="width: 5em;">
+<col width="*">
+</colgroup>
+<tr>
+<td>
+Write key:
+</td>
+<td>
+<input type="text" id="tspeak,key" size="20" value="$cfg(tspeak,key)" onchange="input(this, 'tspeak',
+'key')">
+</td>
+</tr>
+
+<tr>
+<td>
+Interval:
+</td>
+<td>
+<input type="number" style="width: 8em;" id="tspeak,interval" min="15" max="86400" value="$cfg(tspeak,interval)" step="1" onchange="input(this, 'tspeak', 'interval')">
+<input type="checkbox" id="tspeak,sync" [checked cfg(tspeak,sync)] onchange="flag(this, 'tspeak', 'sync')">
+<label for="tspeak,sync">Synchronized</label>
+</td>
+
+
+<tr>
+<td colspan="2" align="center"><hr></td>
+</tr>
+% for {set i 1} {$i <= 8} {incr i} {
+<tr>
+<td>
+Field $i:
+</td>
+<td>
+<select id="tspeak,field$i" onchange="input(this, 'tspeak', 'field$i')">
+<option value="">Unused</option>
+% dict for {key value} $xlate {
+% if {$cfg(tspeak,field$i) eq $key} {
+<option value="$key" selected>$value</option>
+% } else {
+<option value="$key">$value</option>
+% }
+% }
+</select>
+</td>
+</tr>
+% }
+<tr>
+<td colspan="2" align="center"><hr></td>
+</tr>
+<tr>
+<td id="tspeak::status" colspan="2">[get ::tspeak::status "&nbsp;"]</td>
+</tr>
+
+</body>
+</html>

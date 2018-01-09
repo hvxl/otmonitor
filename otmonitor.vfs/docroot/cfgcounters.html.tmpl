@@ -1,0 +1,80 @@
+% global gui
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script src="status.js"></script>
+</head>
+<body>
+<h1>Counters</h1>
+<fieldset>
+<legend>Domestic Hot Water</legend>
+<table width="100%">
+<colgroup>
+<col width="*">
+<col style="width: 6em;">
+<col>
+<col class="fill" style="width:4em;">
+</colgroup>
+<tr>
+<td>Domestic Hot Water Pump Starts</td>
+<td align="right" id="dhwps">[get gui(dhwps) 0]</td>
+<td></td>
+<td><button onclick="command('RS=WPS')">Reset</button></td>
+</tr>
+<tr>
+<td>Domestic Hot Water Pump Hours</td>
+<td align="right" id="dhwph">[get gui(dhwph) 0]</td>
+<td></td>
+<td><button onclick="command('RS=WPH')">Reset</button></td>
+</tr>
+<tr>
+<td>Domestic Hot Water Burner Starts</td>
+<td align="right" id="dhwbs">[get gui(dhwbs) 0]</td>
+<td></td>
+<td><button onclick="command('RS=WBS')">Reset</button></td>
+</tr>
+<tr>
+<td>Domestic Hot Water Burner Hours</td>
+<td align="right" id="dhwbh">[get gui(dhwbh) 0]</td>
+<td></td>
+<td><button onclick="command('RS=WBH')">Reset</button></td>
+</tr>
+</table>
+</fieldset>
+<fieldset>
+<legend>Central Heating</legend>
+<table width="100%">
+<colgroup>
+<col width="*">
+<col style="width: 6em;">
+<col>
+<col class="fill" style="width:4em;">
+</colgroup>
+<tr>
+<td>Central Heating Pump Starts</td>
+<td align="right" id="chps">[get gui(chps) 0]</td>
+<td></td>
+<td><button onclick="command('RS=HPS')">Reset</button></td>
+</tr>
+<tr>
+<td>Central Heating Pump Hours</td>
+<td align="right" id="chph">[get gui(chph) 0]</td>
+<td></td>
+<td><button onclick="command('RS=HPH')">Reset</button></td>
+</tr>
+<tr>
+<td>Central Heating Burner Starts</td>
+<td align="right" id="chbs">[get gui(chbs) 0]</td>
+<td></td>
+<td><button onclick="command('RS=HBS')">Reset</button></td>
+</tr>
+<tr>
+<td>Central Heating Burner Hours</td>
+<td align="right" id="chbh">[get gui(chbh) 0]</td>
+<td></td>
+<td><button onclick="command('RS=HBH')">Reset</button></td>
+</tr>
+</table>
+</fieldset>
+</body>
+</html>

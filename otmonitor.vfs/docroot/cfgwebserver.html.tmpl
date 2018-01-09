@@ -1,0 +1,154 @@
+% global cfg theme docpath
+% foreach dir $docpath {
+%     foreach n [glob -nocomplain -dir $dir -tails theme-*.css] {
+%         lappend themes [string range $n 6 end-4]
+%     }
+% }
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": \["cfg", "webstatus"\]};
+</script>
+<script src="status.js"></script>
+</head>
+<body>
+<h1>Web server</h1>
+<fieldset>
+<legend>Settings</legend>
+<table width="100%">
+<colgroup>
+<col style="width: 6em;">
+<col width="*">
+<col style="width: 6em;">
+<col width="*">
+</colgroup>
+<tr>
+<td>Server port:</td>
+<td>
+<input type="text" size="8" id="web,port" value="[get cfg(web,port) 8080]" onchange="input(this, 'web', 'port')">
+</td>
+<td>Secure port:</td>
+<td>
+<input type="text" size="8" id="web,sslport" value="[get cfg(web,sslport) 0]" onchange="input(this, 'web', 'sslport')">
+</td>
+</tr>
+<tr>
+<td>Web theme:</td>
+<td colspan="3">
+<select id="web,theme" style="width: 8em;">
+% foreach n [lsort -dictionary $themes] {
+<option [selected theme theme-$n]>$n</option>
+% }
+</select>
+</td>
+</tr>
+<tr>
+<td colspan="3">
+<input type="checkbox" id="web,nopass" [checked cfg(web,nopass)] onchange="flag(this, 'web', 'nopass')">
+<label for="web,nopass">Passwordless access on standard port</label>
+</td>
+</tr>
+<tr>
+<td colspan="3">
+<input type="checkbox" id="web,certonly" [checked cfg(web,certonly)] onchange="flag(this, 'web', 'certonly')">
+<label for="web,certonly">Require client certificate on secure port</label>
+</td>
+</tr>
+</table>
+</fieldset>
+
+<fieldset>
+<legend>Control</legend>
+<table width="100%">
+<colgroup>
+<col style="width: 6em;">
+<col width="*">
+<col style="width: 6em;">
+<col style="width: 6em;">
+</colgroup>
+<tr>
+<td>Status:</td>
+<td id="webstatus">[get ::webstatus]</td>
+<td class="fill">
+<button onclick="eval('wibblecmd start')">Start</button>
+</td>
+<td class="fill">
+<button onclick="eval('wibblecmd stop')">Stop</button>
+</td>
+</tr>
+</table>
+</fieldset>
+
+<!--
+<fieldset>
+<legend>Security</legend>
+<table class="center">
+<colgroup>
+<col style="width: 8em;">
+<col style="width: 4em;">
+<col style="width: 8em;">
+</colgroup>
+<tr>
+<td class="fill">
+<button onclick="popup(true)">Passwords ...</button>
+</td>
+<td></td>
+<td class="fill">
+<button onclick="popup(true)" disabled>Certificates ...</button>
+</td>
+</tr>
+</table>
+</fieldset>
+-->
+
+<fieldset>
+<legend>Manage users</legend>
+<table width="100%">
+<colgroup>
+<col style="width: 10em;">
+<col style="width: 1em;">
+<col style="width: 6em;">
+<col width="*">
+</colgroup>
+<tr>
+<td rowspan="5" class="fill">
+<select id="userlist" size="10" onchange="usersel(this)">
+% foreach n [security getusers] {
+<option>$n</option>
+% }
+</select>
+</td>
+<td rowspan="3">&nbsp;</td>
+<td>User name:</td>
+<td class="fill">
+<input type="text" id="username">
+</td>
+</tr>
+<tr>
+<td>Password:</td>
+<td class="fill">
+<input type="password" id="password">
+</td>
+</tr>
+<tr>
+<td>Confirm:</td>
+<td class="fill">
+<input type="password" id="confirm">
+</td>
+</tr>
+<tr>
+<td colspan="3" align="center">
+<button onclick="usermod()" style="width: 12em;">Create/modify user</button>
+</td>
+</tr>
+<tr>
+<td colspan="3" align="center">
+<button onclick="userdel()" style="width: 12em;">Delete user</button>
+</td>
+</tr>
+</table>
+</fieldset>
+
+</body>
+</html>

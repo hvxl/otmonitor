@@ -1,0 +1,63 @@
+% global cfg clients
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": \["cfg", "clients"\]};
+function relayserver(w, section, name) {
+    config(section, name, w.checked);
+    eval('relayserver');
+}
+</script>
+<script src="status.js"></script>
+</head>
+<body>
+<h1>Remote access</h1>
+<fieldset>
+<legend>
+<input type="checkbox" id="server,enable" [checked cfg(server,enable)] onchange="relayserver(this, 'server', 'enable')">
+<label for="server,enable">Enable relay server</label>
+</legend>
+<table width="100%">
+<colgroup>
+  <col style="width: 6em;">
+  <col width="*">
+</colgroup
+<tr>
+<td>
+Server port:
+</td>
+<td>
+<input type="text" size="8" id="server,port" value="[get cfg(server,port) 7686]" onchange="input(this, 'server', 'port')">
+</tr>
+<tr>
+<td colspan="2">
+<input type="checkbox" id="server,relay" [checked cfg(server,relay)] onchange="flag(this, 'server', 'relay')">
+<label for="server,relay">Relay opentherm messages</label>
+</td>
+</tr>
+</table>
+</fieldset>
+
+<fieldset>
+<legend>Connections</legend>
+<table width="100%">
+<colgroup>
+  <col width="*">
+  <col style="width: 6em;">
+</colgroup
+<tr>
+<td class="fill" style="height: 10em;">
+<select id="clients" size="8" class="dict" style="height: 100%;" onchange="buttonstate(this, 'terminate')">
+% dict for {key value} $clients {
+<option value="$value">$key</option>
+% }
+</select>
+</td>
+<td valign="bottom" class="fill">
+<button id="terminate" onclick="terminate('clients')" disabled>Terminate</button>
+</td>
+</tr>
+</table>
+</body>
+</html>

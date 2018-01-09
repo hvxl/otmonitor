@@ -1,0 +1,44 @@
+% global gpiofunc functions gpio led
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": \["led", "gpio"\]};
+var learn = \["LA", "LB", "LC", "LD", "LE", "LF", "GA", "GB"\];
+</script>
+<script src="status.js"></script>
+</head>
+<body>
+<h1>I/O pins</h1>
+<fieldset>
+<legend>GPIO</legend>
+<table>
+% foreach n {A B} {
+<tr>
+<td>GPIO port $n:</td>
+<td><select id="gpio$n" onchange="setting(this, 'G$n')">
+% dict for {v s} $gpiofunc {
+<option [selected gpio($n) $v]>$s</option>
+% }
+</select></td>
+</tr>
+% }
+</table>
+</fieldset>
+<fieldset>
+<legend>LEDs</legend>
+<table>
+% foreach {n d} {A F B X C O D M E P F C} {
+<tr>
+<td>LED $n:</td>
+<td><select id="led$n" onchange="setting(this, 'L$n')">
+% dict for {v s} $functions {
+<option [selected led($n) $v [expr {$v eq $d}]]>$s</option>
+% }
+</select></td>
+</tr>
+% }
+</table>
+</fieldset>
+</body>
+</html>

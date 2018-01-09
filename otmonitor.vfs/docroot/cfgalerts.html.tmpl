@@ -1,0 +1,275 @@
+% global cfg
+% proc jsonlist {list} {return [join [lmap n $list {format {"%s"} $n}] {, }]}
+% proc jsondict {dict} {
+%     return [join [lmap {k v} $dict {format {"%s": "%s"} $k $v}] {, }]
+% }
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": "cfg"};
+</script>
+<script src="status.js"></script>
+<script>
+    var providers = {
+% set cnt [dict size [alert providers]]
+% dict for {provider dict} [alert providers] {
+        "$provider": {
+% if {[dict exists $dict routes]} {
+            "routes": [format {{%s}} [jsondict [dict get $dict routes]]],
+% }
+            "fields": [format {[%s]} [jsonlist [dict values [dict get $dict query]]]]
+% if {[incr cnt -1] > 0} {
+        },
+% } else {
+        }
+% }
+% }
+    }
+    function provider(w, section, name) {
+	var provider = w.options\[w.selectedIndex\].value;
+	config(section, name, provider)
+	var fields = \["account", "password", "sender", "route"\];
+	for (var i = 0; i < fields.length; i++) {
+	    var entry = document.getElementById("sms," + fields\[i\]);
+	    var label = document.getElementById("label:sms," + fields\[i\]);
+	    if (providers\[provider\].fields.indexOf(fields\[i\]) !== -1) {
+		entry.disabled = false;
+		label.className = "enabled";
+	    } else {
+		entry.disabled = true;
+		label.className = "disabled";
+	    }
+	}
+	if (providers\[provider\].routes) {
+	    var sel = document.getElementById("sms,route");
+	    sel.options.length = 0;
+	    for (var val in providers\[provider\].routes) {
+		sel.add(new Option(providers\[provider\].routes\[val\], val));
+	    }
+	}
+    }
+
+    function recipients(w, section, name) {
+	// Create an array, skipping empty lines
+	var list = w.value.split("\\n").filter(function(n){return n});
+	config(section, name, list.join());
+    }
+</script>
+</head>
+<body>
+<h1>Alerts</h1>
+<fieldset>
+<legend>Events</legend>
+<table width="100%">
+<colgroup>
+<col width="*">
+<col style="width: 5em;">
+<col style="width: 5em;">
+</colgroup>
+<tr>
+<td valign="bottom">Boiler fault</td>
+<td>
+<input type="checkbox" id="email,boilerfault" [checked cfg(email,boilerfault)] onchange="flag(this, 'email', 'boilerfault')">
+<label for="email,boilerfault">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,boilerfault" [checked cfg(sms,boilerfault)] onchange="flag(this, 'sms', 'boilerfault')">
+<label for="sms,boilerfault">SMS</label>
+</td>
+</tr>
+<tr>
+<td valign="bottom">Ventilation/heat-recovery fault</td>
+<td>
+<input type="checkbox" id="email,ventilationfault" [checked cfg(email,ventilationfault)] onchange="flag(this, 'email', 'ventilationfault')">
+<label for="email,ventilationfault">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,ventilationfault" [checked cfg(sms,ventilationfault)] onchange="flag(this, 'sms', 'ventilationfault')">
+<label for="sms,ventilationfault">SMS</label>
+</td>
+</tr>
+<tr>
+<td valign="bottom">Solar storage fault</td>
+<td>
+<input type="checkbox" id="email,solarfault" [checked cfg(email,solarfault)] onchange="flag(this, 'email', 'solarfault')">
+<label for="email,solarfault">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,solarfault" [checked cfg(sms,solarfault)] onchange="flag(this, 'sms', 'solarfault')">
+<label for="sms,solarfault">SMS</label>
+</td>
+</tr>
+<tr>
+<td valign="bottom">Gateway watchdog timer</td>
+<td>
+<input type="checkbox" id="email,watchdogtimer" [checked cfg(email,watchdogtimer)] onchange="flag(this, 'email', 'watchdogtimer')">
+<label for="email,watchdogtimer">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,watchdogtimer" [checked cfg(sms,watchdogtimer)] onchange="flag(this, 'sms', 'watchdogtimer')">
+<label for="sms,watchdogtimer">SMS</label>
+</td>
+</tr>
+<tr>
+<td valign="bottom">Communication problem</td>
+<td>
+<input type="checkbox" id="email,commproblem" [checked cfg(email,commproblem)] onchange="flag(this, 'email', 'commproblem')">
+<label for="email,commproblem">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,commproblem" [checked cfg(sms,commproblem)] onchange="flag(this, 'sms', 'commproblem')">
+<label for="sms,commproblem">SMS</label>
+</td>
+</tr>
+<tr>
+<td valign="bottom">Room temperature below 14&deg;C</td>
+<td>
+<input type="checkbox" id="email,roomcold" [checked cfg(email,roomcold)] onchange="flag(this, 'email', 'roomcold')">
+<label for="email,roomcold">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,roomcold" [checked cfg(sms,roomcold)] onchange="flag(this, 'sms', 'roomcold')">
+<label for="sms,roomcold">SMS</label>
+</td>
+</tr>
+<tr>
+<td valign="bottom">CH water pressure low/high</td>
+<td>
+<input type="checkbox" id="email,pressure" [checked cfg(email,pressure)] onchange="flag(this, 'email', 'pressure')">
+<label for="email,pressure">Email</label>
+</td>
+<td>
+<input type="checkbox" id="sms,pressure" [checked cfg(sms,pressure)] onchange="flag(this, 'sms', 'pressure')">
+<label for="sms,pressure">SMS</label>
+</td>
+</tr>
+</table>
+</fieldset>
+
+<fieldset>
+<legend>
+<input type="checkbox" id="email,enable" [checked cfg(email,enable)] onchange="flag(this, 'email', 'enable')">
+<label for="email,enable">Email</label>
+</legend>
+<table class="fixed" width="100%">
+<colgroup>
+  <col style="width: 5em;">
+  <col width="*">
+  <col style="width: 2.2em;">
+  <col style="width: 4em;">
+</colgroup>
+<tr>
+<td>Sender:</td>
+<td class="fill" colspan="3">
+<input type="text" id="email,sender" value="[get cfg(email,sender)]" onchange="input(this, 'email', 'sender')">
+</td>
+</tr>
+<tr>
+<td>Server:</td>
+<td class="fill">
+<input type="text" id="email,server" value="[get cfg(email,server)]" onchange="input(this, 'email', 'server')">
+</td>
+<td>Port:</td>
+<td class="fill">
+<input type="text" id="email,port" value="[get cfg(email,port) smtp]" onchange="input(this, 'email', 'port')">
+</td>
+</tr>
+<tr>
+<td>User:</td>
+<td class="fill" colspan="3">
+<input type="text" id="email,user" value="[get cfg(email,user)]" onchange="input(this, 'email', 'user')">
+</td>
+</tr>
+<tr>
+<td>Password:</td>
+<td class="fill">
+<input type="password" id="email,password" value="[get cfg(email,password)]" onchange="input(this, 'email', 'password')">
+</td>
+<td class="fill" colspan="2">
+<select id="email,secure" onchange="input(this, 'email', 'secure')">
+% foreach n {Plain TLS SSL} {
+<option [selected cfg(email,secure) $n]>$n</option>
+% }
+</select>
+</td>
+</tr>
+<tr>
+<td style="height: 1.em;">Recipients:</td>
+<td colspan="3" rowspan="4" class="fill">
+<textarea onchange="recipients(this, 'email', 'recipient')">
+[join [split [get cfg(email,recipient)] ,] \n]
+</textarea>
+</td>
+</tr>
+<tr>
+<td >&nbsp;</td>
+</tr>
+<tr>
+<td >&nbsp;</td>
+</tr>
+<tr>
+<td >&nbsp;</td>
+</tr>
+</table>
+</fieldset>
+
+<fieldset>
+<legend>
+<input type="checkbox" id="sms,enable" [checked cfg(sms,enable)] onchange="flag(this, 'sms', 'enable')">
+<label for="sms,enable">Text message (SMS)</label>
+</legend>
+<table width="100%">
+<colgroup>
+  <col style="width: 5em;">
+  <col width="*">
+</colgroup
+<tr>
+<td>Destination:</td>
+<td class="fill">
+<input type="text" id="sms,phonenumber" value="[get cfg(sms,phonenumber)]" onchange="input(this, 'sms', 'phonenumber')">
+</td>
+</tr>
+<tr>
+<td>Provider:</td>
+<td>
+<select id="sms,provider" onchange="provider(this, 'sms', 'provider')">
+% foreach n [lsort [dict keys [alert providers]]] {
+<option [selected cfg(sms,provider) $n]>$n</option>
+% }
+</select>
+</td>
+</tr>
+<tr>
+<td id="label:sms,account">Account:</td>
+<td class="fill">
+<input type="text" id="sms,account" value="[get cfg(sms,account)]" onchange="input(this, 'sms', 'account')">
+</td>
+</tr>
+<tr>
+<td id="label:sms,password">Password:</td>
+<td>
+<input type="text" id="sms,password" value="[get cfg(sms,password)]" onchange="input(this, 'sms', 'password')">
+</td>
+</tr>
+<tr>
+<td id="label:sms,sender">Sender:</td>
+<td class="fill">
+<input type="text" id="sms,sender" value="[get cfg(sms,sender)]" onchange="input(this, 'sms', 'sender')">
+</td>
+</tr>
+<tr>
+<td id="label:sms,route">Route:</td>
+<td>
+<select id="sms,route" style="width:8em;">
+</select>
+</td>
+</tr>
+
+</table>
+</fieldset>
+<script>
+document.getElementById("sms,provider").onchange()
+</script>
+</body>
+</html>

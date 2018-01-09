@@ -1,0 +1,186 @@
+%# -*- html -*-
+% global gui
+% proc onoff {val} {
+%   return [lindex {on off} [expr {!$val}]]
+% }
+% scan [format %.1f [get gui(setpoint) 20]] %d%s setpoint half
+% if {[catch {format %.2f [get gui(outside) 15]} outtemp]} {
+%     set outtemp [get gui(outside) 15]
+% }
+<html>
+<head>
+<title>
+</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style type="text/css">
+body {
+  font-family: sans-serif;
+  margin: 0px;
+}
+hr {
+  border: 1px;
+  width: 100%;
+}
+th {
+  border-bottom: 1px solid #808080;
+  font-size: 20px;
+}
+td {
+  height: 100%;
+}
+div.setpoint {
+  font-size: 100px;
+}
+div.half {
+  font-size: 35px;
+}
+object {
+  border: 1px solid #808080;
+  background-color: #ffffff;
+}
+.main {
+  padding: 8px;
+}
+.main table {
+  border: 2px solid #808080;
+  -moz-border-radius:10px;
+  -webkit-border-radius:10px;
+  padding: 0px;
+  margin-top: 20px;
+  background-image: url('header.png');
+  background-repeat:repeat-x;
+  background-color: #f6f6f6;
+  width: 100%;
+}
+.main button {
+  padding: 0px;
+  margin: 8px;
+  font-size: 24px;
+  width: 60px;
+}
+.nav {
+  position: absolute; bottom: 0px; width: 100%;
+}
+.nav table {
+  width: 100%;
+}
+.nav button {
+  width: 100%;
+  padding: 0px;
+  margin: 0px;
+  background-color: #dddddd;
+  -webkit-border-radius:5px;
+}
+input:active {
+  position:relative;
+  top: 3px;
+}
+#container {
+  position: relative;
+}
+#container #dhwmode {
+  position:absolute;
+  top: -26;
+  left: 0;
+}
+</style>
+<script type="text/javascript">
+var reqsetpt;
+
+function parts(w, unitid, halfid) {
+    var unit = document.getElementById(unitid);
+    var half = document.getElementById(halfid);
+    var val = parseFloat(w.value) + 0.25;
+    var num = Math.floor(val);
+    var frac = val - num >= 0.5 ? ".5" : ".0";
+    unit.innerHTML = num;
+    half.innerHTML = frac;
+}
+
+function control(op) {
+    var w = document.getElementById("setpoint");
+    if (!reqsetpt) {
+	reqsetpt = parseFloat(w.value);
+    }
+    if (op == "Up") {
+	reqsetpt += 0.5;
+    } else if (op == "Down") {
+	reqsetpt -= 0.5;
+    }
+    command("TT=" + reqsetpt);
+    w.value = reqsetpt;
+    w.onchange();
+    return false;
+}
+</script>
+<script src="status.js" type="text/javascript"></script>
+</head>
+<body>
+
+<div class="main">
+<form method="post">
+<table>
+<tr>
+<th colspan="8">
+<img src="images/blank22.png" style="float:left;">
+Heating
+<img id="websock" src="images/offline.png" image0="images/offline.png" image1="images/online.png" style="float:right;">
+</th>
+</tr>
+<tr>
+<td colspan="8" align="center">
+Inside temperature:
+<span id="temperature">[format %.2f [get gui(temperature) 20]]</span>&deg;C
+</td>
+</tr>
+<tr>
+<td width="20%"></td>
+<td valign="center" width="40">
+<span id="container">
+<img id="chmode" src="images/chmode-[onoff [get gui(chmode) 0]].png" image0="images/chmode-off.png" image1="images/chmode-on.png">
+<img id="dhwmode" src="images/dhwmode-[onoff [get gui(dhwmode) 0]].png" image0="images/dhwmode-off.png" image1="images/dhwmode-on.png">
+</span>
+</td>
+<td width="20%"></td>
+<td align="right" rowspan="2" width="100">
+<div class="setpoint" id="units">[expr {int([get gui(setpoint) 20])}]</div>
+<input type="text" id="setpoint" style="display: none;" onchange="parts(this, 'units', 'half')" value="[get gui(setpoint) 20]">
+</td>
+<td valign="center">
+<div class="half">&deg;C</div>
+</td>
+<td width="20%"></td>
+<td width="40" align="center">
+<input type="image" name="hvac" value="+" src="images/warmer.png" onclick="return control('Up')">
+</td>
+<td width="20%"></td>
+</tr>
+<tr>
+<td></td>
+<td valign="center">
+<img id="flame" src="images/flame-[onoff [get gui(flame) 0]].png" image0="images/flame-off.png" image1="images/flame-on.png">
+</td>
+<td></td>
+<td valign="center">
+<div id="half" class="half">$half</div>
+</td>
+<td></td>
+<td align="center">
+<input type="image" name="hvac" value="+" src="images/colder.png" onclick="return control('Down')">
+</td>
+<td></td>
+</tr>
+<tr>
+<td colspan="8" align="center">
+Outside temperature:
+<span id="outside">$outtemp</span>&deg;C
+</td>
+</tr>
+</table>
+</form>
+</div>
+</body>
+</html>

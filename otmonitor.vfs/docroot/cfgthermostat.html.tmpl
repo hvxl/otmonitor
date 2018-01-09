@@ -1,0 +1,87 @@
+% global gui cfg
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": "cfg"};
+</script>
+<script src="status.js"></script>
+<script src="cfgthermostat.js"></script>
+</head>
+<body onload="clock()">
+<h1>Thermostat</h1>
+<fieldset>
+<legend>Setpoint</legend>
+<table>
+<tr>
+<td width="*" class="fill">
+<input type="range" id="setpt1" onchange="sync(this, 'setpt2')" min="5" max="30" value="[get gui(setpoint) 20]" step="0.1" list="tickmarks">
+<datalist id="tickmarks">
+<option>5</option>
+<option>6</option>
+<option>7</option>
+<option>8</option>
+<option>9</option>
+<option>10</option>
+<option>11</option>
+<option>12</option>
+<option>13</option>
+<option>14</option>
+<option>15</option>
+<option>16</option>
+<option>17</option>
+<option>18</option>
+<option>19</option>
+<option>20</option>
+<option>21</option>
+<option>22</option>
+<option>23</option>
+<option>24</option>
+<option>25</option>
+<option>26</option>
+<option>27</option>
+<option>28</option>
+<option>29</option>
+<option>30</option>
+</datalist>
+</td>
+<td width="10%" class="fill">
+<input type="number" id="setpt2" onchange="sync(this, 'setpt1')" min="5" max="30" value="[get gui(setpoint) 20]" step="0.1">
+</td>
+</tr>
+</table>
+<table width="100%">
+<tr>
+<td width="12%" class="fill">
+<button onclick="command('TT=0')">Schedule</button>
+</td>
+<td width="*"></td>
+<td width="12%" class="fill">
+<button onclick="setpoint('setpt1', 'TT')">Temporary</button>
+</td>
+<td width="12%" class="fill">
+<button onclick="setpoint('setpt1', 'TC')">Constant</button>
+</td>
+</tr>
+</table>
+</fieldset>
+<fieldset>
+<legend>Clock</legend>
+Current time:
+<span id="clock"><noscript>Who knows</noscript></span>
+<hr>
+<input type="checkbox" id="clock,date" [checked cfg(clock,date) true] onchange="flag(this, 'clock', 'date')">
+<label for="clock,date">Send the current date to the gateway</label>
+<br>
+<input type="checkbox" id="clock,year" [checked cfg(clock,year) true] onchange="flag(this, 'clock', 'year')">
+<label for="clock,year">Send the current year to the gateway</label>
+<br>
+<input type="checkbox" id="clock,auto" [checked cfg(clock,auto) true] onchange="flag(this, 'clock', 'auto')">
+<label for="clock,auto">Automatically update the gateway clock</label>
+<br>
+<div class="center" class="fill">
+<button onclick="setclock()">Set Clock</button>
+</div>
+</fieldset>
+</body>
+</html>

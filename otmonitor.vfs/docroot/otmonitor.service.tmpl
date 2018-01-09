@@ -1,0 +1,17 @@
+% dict set state response header content-type {} text/plain
+% global cmdline tcl_platform
+% set exec $cmdline
+% foreach n {--system --daemon} {
+%   if {$n ni $cmdline} {
+%     set exec [linsert $exec 1 $n]
+%   }
+% }
+% if {$starkit::mode in {unwrapped sourced}} {
+%   set exec [linsert $exec 0 [info nameofexecutable]]
+% } elseif {$starkit::mode in {starpack}} {
+%   set exec [lreplace $exec 0 0 [info nameofexecutable]]
+% }
+[format {[D-BUS Service]}]
+Name=com.tclcode.otmonitor
+Exec=$exec
+User=$tcl_platform(user)

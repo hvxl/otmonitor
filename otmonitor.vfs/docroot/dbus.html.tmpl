@@ -1,0 +1,114 @@
+%# -*- html -*-
+% global theme
+<html>
+<head><title>Opentherm Gateway - Using DBus</title></head>
+<link rel="stylesheet" type="text/css" href="$theme.css">
+<style>
+pre {
+  margin: 10px;
+  padding: 5px 10px;
+  font-weight: bold;
+  background: black;
+  color: #00FF00;
+}
+dt {
+  margin-top: 0.3em;
+}
+</style>
+<body>
+<div id="section">
+<h1>Using DBus</h1>
+<div>
+On systems that support it, otmonitor will attempt to connect to the DBus.
+It uses com.tclcode.otmonitor as its name on the dbus and as the interface
+name. All signals and methods are under the / path.
+<h2>Signals</h2>
+The otmonitor application will generate the following DBus signals when the
+matching data received on the opentherm line changes:
+<ul>
+<li>signal void com.tclcode.otmonitor.BoilerWaterTemperature(double temp)
+<li>signal void com.tclcode.otmonitor.CHEnable(bool on)
+<li>signal void com.tclcode.otmonitor.CHSetpoint(double temp)
+<li>signal void com.tclcode.otmonitor.CentralHeating(bool on)
+<li>signal void com.tclcode.otmonitor.ControlSetpoint(double temp)
+<li>signal void com.tclcode.otmonitor.DHWEnable(bool on)
+<li>signal void com.tclcode.otmonitor.DHWSetpoint(double temp)
+<li>signal void com.tclcode.otmonitor.DHWTemperature(double temp)
+<li>signal void com.tclcode.otmonitor.Error(uchar code)
+<li>signal void com.tclcode.otmonitor.Fault(bool on)
+<li>signal void com.tclcode.otmonitor.Flame(bool on)
+<li>signal void com.tclcode.otmonitor.HotWater(bool on)
+<li>signal void com.tclcode.otmonitor.Modulation(double level)
+<li>signal void com.tclcode.otmonitor.OutsideTemperature(double temp)
+<li>signal void com.tclcode.otmonitor.PowerMode(QString mode)
+<li>signal void com.tclcode.otmonitor.ReturnWaterTemperature(double temp)
+<li>signal void com.tclcode.otmonitor.RoomTemperature(double temp)
+<li>signal void com.tclcode.otmonitor.Setpoint(double temp)
+<li>signal void com.tclcode.otmonitor.Thermostat(bool connected)
+</ul>
+
+In addition, the following signal will be generated when otmonitor detects
+that the gateway has reset:
+<ul>
+<li>signal void com.tclcode.otmonitor.GatewayReset()
+</ul>
+
+
+<h2>Methods</h2>
+There are also some DBus methods available to instruct otmonitor to take some
+action:
+<dl>
+<dt>method QString com.tclcode.otmonitor.Command(QString cmd)
+<dd>Sends a serial command to the gateway
+<dt>method void com.tclcode.otmonitor.Quit()
+<dd>Terminates the application
+</dl>
+
+To configure security settings for remote access via the web server, the
+following methods are available under the <b>/Security</b> path:
+
+<dl>
+<dt>method QString com.tclcode.otmonitor.AddCertificate(QString file, QString
+access)
+<dd>Install a client certificate.
+<dt>method QString com.tclcode.otmonitor.AddUser(QString user, QString
+password)
+<dd>Add a user with access via a password.
+<dt>method QString com.tclcode.otmonitor.ChangePassword(QString user, QString
+password)
+<dd>Change the password for an existing user.
+<dt>method QString com.tclcode.otmonitor.DeleteUser(QString user)
+<dd>Delete a user with password access.
+<dt>method QString com.tclcode.otmonitor.RevokeCertificate(QString serialno)
+<dd>Revoke a client certificate, so access using that certificate will no
+longer possible. 
+</dl>
+
+<h2>Busses</h2>
+On a system that provides DBus functionality, usually two busses are
+available; the session bus and the system bus. 
+<h3>Session bus</h3>
+By default otmonitor will connect to the session dbus. No special
+configuration is necessary for this to work. The only prerequisite is that
+a session bus is available. A session bus is usually created along with the
+X session, but may also be started via the <i>dbus-launch</i> command. 
+<h3>System bus</h3>
+When running otmonitor on a system without a graphical environment (using
+the --daemon option), it may make more sense to have the application connect
+to the system dbus. This may be requested via the --system option. However,
+the host system must be configured to permit the application to connect to
+the system dbus. This can be most easily done by running the following
+command as root: 
+<pre>
+wget -O /etc/dbus-1/system.d/com.tclcode.otmonitor.conf http://localhost:$port/otmonitor.conf
+</pre>
+It is also possible to auto-start the application when accessed via the
+dbus. To achieve that, run the next command as root:
+<pre>
+wget -O /usr/share/dbus-1/system-services/com.tclcode.otmonitor.service http://localhost:$port/otmonitor.service
+</pre>
+</div>
+</div>
+[include footer.inc]
+</body>
+</html>

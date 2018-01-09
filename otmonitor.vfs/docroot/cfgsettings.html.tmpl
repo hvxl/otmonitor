@@ -1,0 +1,107 @@
+% global voltref setback midbit overridehb
+% variable vreffmt [format %.3f [expr {([get voltref 3] + 3) * 5 / 24.}]]
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<style>
+input\[type="text"\]:disabled {
+    color: black;
+}
+</style>
+<script>
+var query = {"var": \["voltref", "setback", "midbit", "overridehb"\]};
+var learn = \["VR", "IT", "SB", "OH"\];
+</script>
+<script src="status.js"></script>
+<script>
+function vref(w) {
+    var e = document.getElementById("vrefstr");
+    if (e) {
+        var v = (parseInt(w.value) + 3) * 5 / 24 + 0.0005;
+	e.value = v.toString().substr(0, 5);
+    }
+}
+</script>
+</head>
+<body>
+<h1>Settings</h1>
+<input type="checkbox" id="midbit" [checked midbit 1] onchange="toggle(this, 'IT')">
+<label for="midbit">Ignore multiple mid-bit transitions</label>
+<br>
+<input type="checkbox" id="overridehb" [checked overridehb 1] onchange="toggle(this, 'OH')">
+<label for="overridehb">Return the Remote Override Function Flags in both
+data bytes</label>
+<fieldset>
+<legend>Reference voltage</legend>
+<table>
+<tr>
+<td width="*" class="fill">
+<input type="range" id="vref" onchange="vref(this)" value="[get voltref 3]" min="0" max="9" list="vrefvals">
+<datalist id="vrefvals">
+<option>0</option>
+<option>1</option>
+<option>2</option>
+<option>3</option>
+<option>4</option>
+<option>5</option>
+<option>6</option>
+<option>7</option>
+<option>8</option>
+<option>9</option>
+</datalist>
+</td>
+<td width="10%" class="fill">
+<input type="text" id="vrefstr" size="5" value="$vreffmt" disabled>
+</td>
+<td width="5%" class="fill">
+<button onclick="setpoint('vref', 'VR')">Set</button>
+</td>
+</tr>
+</table>
+</fieldset>
+<fieldset>
+<legend>Setback temperature</legend>
+<table>
+<tr>
+<td width="*" class="fill">
+<input type="range" id="setpt1" onchange="sync(this, 'setpt2')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
+<datalist id="tickmarks">
+<option>5</option>
+<option>6</option>
+<option>7</option>
+<option>8</option>
+<option>9</option>
+<option>10</option>
+<option>11</option>
+<option>12</option>
+<option>13</option>
+<option>14</option>
+<option>15</option>
+<option>16</option>
+<option>17</option>
+<option>18</option>
+<option>19</option>
+<option>20</option>
+<option>21</option>
+<option>22</option>
+<option>23</option>
+<option>24</option>
+<option>25</option>
+<option>26</option>
+<option>27</option>
+<option>28</option>
+<option>29</option>
+<option>30</option>
+</datalist>
+</td>
+<td width="10%" class="fill">
+<input type="number" id="setpt2" onchange="sync(this, 'setpt1')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
+</td>
+<td width="5%" class="fill">
+<button onclick="setpoint('setpt1', 'SB')">Set</button>
+</td>
+</tr>
+</table>
+</fieldset>
+</body>
+</html>

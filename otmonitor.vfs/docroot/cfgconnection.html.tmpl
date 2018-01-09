@@ -1,0 +1,82 @@
+% global cfg connected
+% variable ports [comport enum] image
+% if {$connected} {
+%     set image images/connect.png
+% } else {
+%     set image images/disconnect.png
+% }
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<style>
+h1 img {
+  float: right;
+  margin: 10px;
+}
+</style>
+<script>
+var query = {"var": \["cfg", "connected"\]};
+function connection(value) {
+    fieldsetradio('connection');
+    config('connection', 'type', value);
+}
+function connect() {
+    if (ws) ws.send("connect");
+}
+</script>
+<script src="status.js"></script>
+</head>
+<body onload="fieldsetradio('connection')">
+<h1>
+Connection
+<img id="connected" src="$image" image0="images/disconnect.png" image1="images/connect.png">
+</h1>
+<fieldset>
+<legend>
+<input type="radio" id="connection,type:serial" [checked cfg(connection,type) serial] name="connection" onclick="connection('serial')">
+<label for="connection,type:serial">Serial port</label>
+</legend>
+<table width="100%">
+<tr>
+<td width="15%">
+Serial device:
+</td>
+<td width="*">
+<input type="text" id="connection,device" list="values" value="[get cfg(connection,device) [lindex $ports 0]]" onchange="input(this, 'connection', 'device')">
+<datalist id="values">
+% foreach n $ports {
+<option value="$n">
+% }
+</datalist>
+</tr>
+</table>
+</fieldset>
+<fieldset>
+<legend>
+<input type="radio" id="connection,type:tcp" [checked cfg(connection,type) tcp] name="connection" onclick="connection('tcp')">
+<label for="connection,type:tcp">TCP connection</label>
+</legend>
+<table width="100%">
+<tr>
+<td width="15%">
+Remote&nbsp;host:
+</td>
+<td width="*">
+<input type="text" id="connection,host" size="50" value="[get cfg(connection,host) localhost]" onchange="input(this, 'connection', 'host')">
+</td>
+</tr>
+<tr>
+<td width="15%">
+Remote&nbsp;port:
+</td>
+<td width="*">
+<input type="text" id="connection,port" size="20" value="[get cfg(connection,port) 25238]" onchange="input(this, 'connection', 'port')">
+</td>
+</tr>
+</table>
+</fieldset>
+<div style="text-align: right;margin-right: 5px">
+<button onclick="connect()">Connect</button>
+</div>
+</body>
+</html>

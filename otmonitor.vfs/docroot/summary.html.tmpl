@@ -1,0 +1,65 @@
+%# -*- html -*-
+% global message value last start theme
+<html>
+<head>
+<title>Summary</title>
+<link rel="stylesheet" type="text/css" href="$theme.css">
+</head>
+<body>
+<div id="section">
+<h1>Summary</h1>
+<div>
+<table id="stats" width="100%">
+<tr>
+<th><a href="?sort=id">Hex</a></th>
+<th><a href="?sort=id">Dec</a></th>
+<th><a href="?sort=dir">Dir</a></th>
+<th><a href="?sort=name">Description</a></th>
+<th><a href="?sort=freq">Freq</a></th>
+<th><a href="?sort=value">Value</a></th>
+</tr>
+% set now [clock seconds]
+% set sort desc
+% if {[dict exists $state request query sort {}]} {
+%     set sort [dict get $state request query sort {}]
+% }
+% set list {}
+% foreach n [array names value {[14],*}] {
+%     lassign [split $n ,] type id
+%     if {[info exists message($id)]} {
+%         set msg [lindex $message($id) 0]
+%     } else {
+%         set msg "MessageID $id"
+%     }
+%     if {[llength $last($n)] > 1} {
+%         set freq [expr {([lindex $last($n) 0] - [lindex $last($n) end]) / ([llength $last($n)] - 1)}]
+%     } else {
+%         set freq ---
+%     }
+%     set dir [lindex {Read Write} [string match {1,*} $n]]
+%     lappend list [list $id $msg $freq $dir $value($n)]
+% }
+% switch -- $sort {
+%     id {set index 0; set opt -integer}
+%     freq {set index 2; set opt -dictionary}
+%     dir {set index 3; set opt -dictionary}
+%     value {set index 4; set opt -dictionary}
+%     default {set index 1; set opt -dictionary}
+% }
+% foreach n [lsort $opt -index $index $list] {
+%     lassign $n id msg freq dir val
+<tr>
+<td align="center">[format %02X $id]</td>
+<td align="right">$id</td>
+<td align="center">$dir</td>
+<td>$msg</td>
+<td align="right">$freq</td>
+<td align="right">$val</td>
+</tr>
+% }
+</table>
+</div>
+</div>
+[include footer.inc]
+</body>
+</html>

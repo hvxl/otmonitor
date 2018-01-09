@@ -1,0 +1,152 @@
+body {
+  background: none repeat scroll 0 0 #D8E9E7;
+  margin: 0px;
+}
+#section {
+  margin: 1em 1em 1em;
+  color: #FFFF80;
+  font-weight: bold;
+  background: none repeat scroll 0 0 #930EFF;
+  padding: 0px;
+  position: relative;
+  border: solid #55018E;
+  -moz-border-radius: 20px;
+  -webkit-border-radius: 20px;
+  -khtml-border-radius: 20px;
+  border-radius: 20px;
+}
+#section a:link {
+  color: #B1FFAA;
+}
+#section a:visited {
+  color: #AAFFFF;
+}
+#dialog {
+  width: 600px;
+  margin: 15px auto 0px;
+  background: #FFE0E0;
+  padding: 10px;
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  -khtml-border-radius: 10px;
+  border-radius: 10px;
+}
+td.field {
+  background:#FFFFC0;
+  border:1px solid #550894;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  -khtml-border-radius: 5px;
+  border-radius: 5px;
+}
+td.progressbar {
+  background:#930EFF;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  -khtml-border-radius: 5px;
+  border-radius: 5px;
+}
+div.progressbar {
+  background:#FF8000;
+  width:0%;
+  padding:0;
+  -moz-border-radius: 3px;
+  -webkit-border-radius: 3px;
+  -khtml-border-radius: 3px;
+  border-radius: 3px;
+}
+form {
+  margin: 0px;
+}
+div {
+  margin: 0;
+  padding: 0.8em;
+}
+iframe {
+  background: #FFF7FF;
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  -khtml-border-radius: 10px;
+  border-radius: 10px;
+}
+h1 {
+  background: #FFE0E0;
+  color: #55018E;
+  text-align: center;
+  padding: 5px;
+  margin: 10px;
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  -khtml-border-radius: 10px;
+  border-radius: 10px;
+}
+hr {
+  /*
+  background: url(/images/separator.png) no-repeat center;
+  border: 0;
+  padding: 2px;
+  */
+  color: #FFE0E0;
+  background-color: #FFE0E0;
+  border: 0;
+  width: 70%;
+}
+table {
+  color: #FFFF80;
+  font-weight: bold;
+  margin-left: auto;
+  margin-right: auto;
+}
+table.dialog {
+  color: #550894;
+  width: 100%;
+  font-weight: normal;
+}
+footer {
+  position: absolute;
+  right: 0;
+  left: 0;
+  margin: 0;
+  padding: 0.5em;
+}
+footer a {
+  color: #008;
+  font-weight: bold;
+  text-decoration: none;
+  margin: 0 1em;
+}
+#stats {
+  border-spacing: 4px 2px;
+}
+#stats td {
+  padding: 2px 10px;
+}
+#stats th {
+  background: #FFE0E0;
+  -moz-border-radius: 6px;
+  -webkit-border-radius: 6px;
+  -khtml-border-radius: 6px;
+  border-radius: 6px;
+}
+#stats a:link {
+  color: #55018E;
+  text-decoration: none;
+}
+#stats a:visited {
+  color: #55018E;
+  text-decoration: none;
+}
+img.checkclr {
+  background-image:url('images/led-clr.png');
+}
+img.checkset {
+  background-image:url('images/led-set.png');
+}
+img.checkunk {
+  background-image:url('images/led-unk.png');
+}
+/* Opentherm Gateway Graph */
+.legend rect {
+  stroke: #FFF7FF;
+  fill: #FFF7FF;
+}

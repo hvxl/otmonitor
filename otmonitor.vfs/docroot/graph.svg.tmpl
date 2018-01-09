@@ -1,0 +1,98 @@
+% global track start graph theme timestamp
+% set now $timestamp
+% set maxx [expr {min(1440, ($now - $start) / 5.) + 25}]
+% # Calculate the height of the graph
+% set height 18
+% dict for {name dict} $graph {
+%     dict update dict min min max max scale scale zoom zoom {
+%         set height [expr {$height + 8 + ($max - $min) * $zoom}]
+%     }
+% }
+% set maxx [expr {round($maxx)}]
+% # Make sure there is at least enough room for the legend.
+% set width [expr {max($maxx, 220)}]
+% set height [expr {round($height)}]
+% set zero [expr {92 * 5}]
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/css" href="$theme.css"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="$width" height="$height" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<title>Opentherm gateway graph</title>
+<style>
+.legend {
+  opacity: 0.8;
+  background: #ffffff;
+  cursor: default;
+  fill: white;
+  stroke: white;
+}
+.legend text,circle {
+  stroke: none;
+}
+</style>
+<!-- Vertical lines -->
+% set sec [expr {$now / 300 * 300}]
+% set x [expr {$maxx - ($now % 300) / 5.}]
+% while {$x > 25} {
+%     set time [clock format $sec -format %H:%M]
+<polyline points="$x 0 $x $height" style="stroke: #eee; fill: none;"/>
+<text x="$x" y="[expr {$height - 2}]" text-anchor="middle" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$time</text>
+%     set x [expr {$x - 60}]
+%     incr sec -300
+% }
+% set y 0
+% dict for {group dict} $graph {
+%     incr y 8
+%     set legend {}
+%     dict with dict {
+%         set zero [expr {$y + $max * $zoom}]
+<!-- Horizontal lines -->
+%         for {set v $min} {$v <= $max} {incr v $scale} {
+%             set i [expr {$zero - $v * $zoom}]
+<polyline points="25 $i $maxx $i" style="stroke: #eee; fill: none;"/>
+%             set i [expr {$i + 4}]
+<text x="22" y="$i" text-anchor="end" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$v</text>
+%         }
+<!-- Traces -->
+%         dict for {name data} $line {
+%             set coords {}
+%             set color [dict get $data color]
+%             set title [dict get $data name]
+%             if {![info exists track($name)]} continue
+%             foreach {ts val} $track($name) {
+%                 set x [expr {max(25, $maxx - ($now - $ts) / 5.)}]
+%                 set i [expr {$zero - $val * $zoom}]
+%                 if {$x <= 25} {set coords {}}
+%                 lappend coords $x $i
+%             }
+%             lappend coords $maxx $i
+%             if {$type eq "polygon"} {
+%                 if {$i != 0} {lappend coords $maxx $zero}
+%                 lappend coords [lindex $coords 0] $zero
+%                 set fill $color
+%             } else {
+%                 set fill none
+%             }
+<g>
+<title>$title</title>
+[format {<polyline points="%s" id="%s" style="stroke: %s; fill: %s;"/>} \
+  [join $coords] $name $color $fill]
+</g>
+%         }
+%         set v [expr {$y + 4}]
+<g class="legend">
+%         set h [expr {[dict size $line] * 14 - 3}]
+<rect x="22" y="$y" width="180" height="$h"/>
+%         dict for {name data} $line {
+%             set title [dict get $data name]
+%             set color [dict get $data color]
+<circle cx="32" cy="$v" r="4" fill="$color"/>
+%             incr v 4
+<text x="40" y="$v" text-anchor="start" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$title</text>
+%             incr v 10
+%         }
+</g>
+%     }
+%     incr y [expr {round(($max - $min) * $zoom)}]
+% }
+</svg>

@@ -1,0 +1,112 @@
+% global cfg
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="config.css">
+<script>
+var query = {"var": "cfg"};
+function mqtt(w) {
+    config('mqtt', 'enable', w.checked);
+    eval("mqttserver");
+}
+</script>
+<script src="status.js"></script>
+</head>
+<body>
+<h1>MQTT</h1>
+<fieldset>
+<legend>
+<input type="checkbox" id="mqtt,enable" [checked cfg(mqtt,enable)] onchange="mqtt(this)">
+<label for="mqtt,enable">Enable MQTT</label>
+</legend>
+<table width="100%">
+<colgroup>
+  <col style="width: 10em;">
+  <col width="*">
+</colgroup>
+<tr>
+<td>Broker address:</td>
+<td colspan="2" class="fill">
+<input type="text" id="mqtt,broker" value="$cfg(mqtt,broker)" onchange="input(this, 'mqtt', 'broker')">
+</td>
+</tr>
+<tr>
+<td>Broker port:</td>
+<td colspan="2">
+<input type="text" size="8" id="mqtt,port" value="$cfg(mqtt,port)" onchange="input(this, 'mqtt', 'port')">
+</td>
+</tr>
+<tr>
+<td>Client identifier:</td>
+<td colspan="2" class="fill">
+<input type="text" id="mqtt,client" value="$cfg(mqtt,client)" onchange="input(this, 'mqtt', 'client')">
+</td>
+</tr>
+<tr>
+<td>User name:</td>
+<td colspan="2" class="fill">
+<input type="text" id="mqtt,username" value="$cfg(mqtt,username)" onchange="input(this, 'mqtt', 'username')">
+</td>
+</tr>
+<tr>
+<td>Password:</td>
+<td colspan="2" class="fill">
+<input type="password" id="mqtt,password" value="$cfg(mqtt,password)" onchange="input(this, 'mqtt', 'password')">
+</td>
+</tr>
+<tr>
+<td>Event topic:</td>
+<td colspan="2" class="fill">
+<input type="text" id="mqtt,eventtopic" value="$cfg(mqtt,eventtopic)" onchange="input(this, 'mqtt', 'eventtopic')">
+</td>
+</tr>
+<tr>
+<td>Action topic:</td>
+<td colspan="2" class="fill">
+<input type="text" id="mqtt,actiontopic" value="$cfg(mqtt,actiontopic)" onchange="input(this, 'mqtt', 'actiontopic')">
+</td>
+</tr>
+<tr>
+<td>Data format:</td>
+<td>
+<select id="mqtt,format" onchange="input(this, 'mqtt', 'format')">
+<option [selected cfg(mqtt,format) json1]>Simple JSON</option>
+<option [selected cfg(mqtt,format) json2]>Standard JSON</option>
+<option [selected cfg(mqtt,format) json3]>Extended JSON</option>
+<option [selected cfg(mqtt,format) raw]>Unformatted</option>
+</select>
+</td>
+<td align="right">
+<input type="checkbox" id="mqtt,messages" [checked mqtt,messages] onchange="flag(this, 'mqtt', 'messages')">
+<label for="mqtt,messages">All Messages&nbsp;&nbsp;</label>
+</td>
+</tr>
+
+<tr>
+<td>Quality of Service:</td>
+<td colspan="2">
+<select id="mqtt,qos" onchange="input(this, 'mqtt', 'qos')">
+<option [selected cfg(mqtt,qos) 0]>Fire and forget</option>
+<option [selected cfg(mqtt,qos) 1]>Acknowledged delivery</option>
+<option [selected cfg(mqtt,qos) 2]>Assured delivery</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td>Keep-alive Interval:</td>
+<td>
+<input type="number" style="width: 8em;" id="mqtt,keepalive" min="0" max="65536" value="[get cfg(mqtt,keepalive) 120]" step="1" onchange="input(this, 'mqtt', 'keepalive')">
+</td>
+</tr>
+<tr>
+<td>Retransmit Time:</td>
+<td>
+<input type="number" style="width: 8em;" id="mqtt,retransmit" min="0" max="65536" value="[get cfg(mqtt,retransmit) 10]" step="1" onchange="input(this, 'mqtt', 'retransmit')">
+</td>
+</tr>
+
+
+</table>
+</fieldset>
+</body>
+</html>

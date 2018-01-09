@@ -1,0 +1,25 @@
+% global theme cfg
+% set checked ""
+% if {$cfg(web,graphlegend)} {set checked checked}
+<html>
+<head>
+<title>Opentherm Gateway Graph</title>
+<link rel="stylesheet" type="text/css" href="$theme.css">
+<script src="legend.js"></script>
+</head>
+<body>
+<div id="section">
+<h1>Opentherm Gateway Graph</h1>
+<div>
+<iframe id="image" src="graph.svg" width="100%" height="80%">
+</iframe>
+<span style="float:right">
+<label for="legend">Show legend</label>
+<input id="legend" type="checkbox" onclick="legend()" $checked>
+</span>
+<br style="clear:both">
+</div>
+</div>
+[include footer.inc]
+</body>
+</html>
