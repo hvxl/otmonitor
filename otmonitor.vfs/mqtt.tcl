@@ -3,6 +3,21 @@
 
 package require mqtt
 
+set mqttactions {
+    setpoint		{temp	TT}
+    constant		{temp	TC}
+    outside		{temp	OT}
+    hotwater		{on	HW}
+    gatewaymode		{on	GW}
+    setback		{temp	SB}
+    maxchsetpt		{temp	SH}
+    maxdhwsetpt		{temp	SW}
+    maxmodulation	{level	MM}
+    ctrlsetpt		{temp	CS}
+    chenable		{on	CH}
+    ventsetpt		{level	VS}
+}
+
 proc mqttinit {} {
     global cfg mqtt signals gui
 
@@ -147,21 +162,47 @@ proc mqttmessage {msg} {
     
 }
 
-proc mqttaction {topic data} {
-    global cfg
-    if {$cfg(mqtt,format) ne "json"} {
-	set value $data
-    } elseif {[regexp {"value"\s*:\s*"(\S+)"} $data -> value] != 1} {
+proc mqttaction {topic data args} {
+    global cfg mqttactions
+    set name [lindex [split $topic /] end]
+    if {[dict exists $mqttactions $name]} {
+	lassign [dict get $mqttactions $name] arg cmd
+    } else {
+	# Unknown action
 	return
     }
-    switch -- [lindex [split $topic /] 2] {
-	setpoint {
-	    sercmd TT=$value "via MQTT"
+    if {$cfg(mqtt,format) eq "raw"} {
+	set value $data
+    } else {
+	package require json
+	if {[catch {json::json2dict $data} dict]} {
+	    # Invalid JSON
+	    return
 	}
-	outside {
-	    sercmd OT=$value "via MQTT"
+	switch $cfg(mqtt,format) {
+	    json - json1 - json2 {
+		if {[dict exists $dict value]} {
+		    set value [dict get $dict value]
+		} else {
+		    # No value specified
+		    return
+		}
+	    }
+	    json3 {
+		if {[dict exists $dict $arg value]} {
+		    set value [dict get $dict $arg value]
+		} else {
+		    # No value specified
+		    return
+		}
+	    }
+	    default {
+		# Unknown data format
+		return
+	    }
 	}
     }
+    sercmd $cmd=$value "via MQTT"
 }
 
 mqttinit
