@@ -1546,9 +1546,9 @@ proc gui::cfgmqtt {w} {
     ttk::entry $w.f1.e4 -textvariable cfg(mqtt,username)
     ttk::label $w.f1.l5 -text "Password:"
     ttk::entry $w.f1.e5 -textvariable cfg(mqtt,password) -show *
-    ttk::label $w.f1.l6 -text "Event topic:"
+    ttk::label $w.f1.l6 -text "Event topic prefix:"
     ttk::entry $w.f1.e6 -textvariable cfg(mqtt,eventtopic)
-    ttk::label $w.f1.l7 -text "Action topic:"
+    ttk::label $w.f1.l7 -text "Action topic prefix:"
     ttk::entry $w.f1.e7 -textvariable cfg(mqtt,actiontopic)
     ttk::label $w.f1.l11 -text "Data Format:"
     set valdict {
