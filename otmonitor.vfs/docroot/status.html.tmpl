@@ -31,7 +31,7 @@ var query = {"var" : \["gui", "error"\]};
 %	overtemp	"Water over-temperature"
 % }
 % set table2 {
-%	temperature	&deg;C	"Room temperature"
+%	roomtemp	&deg;C	"Room temperature"
 %	outside		&deg;C	"Outside temperature"
 %	setpoint	&deg;C	"Room setpoint"
 %	boilertemp	&deg;C	"Boiler water temperature"
@@ -45,6 +45,15 @@ var query = {"var" : \["gui", "error"\]};
 %	pressure	bar	"Central heating water pressure"
 %	maxmod		%	"Max. relative modulation level"
 %	faultcode	""	"OEM fault code"
+% }
+% if {[info exists gui(ch2)] && $gui(ch2)} {
+%    lappend table2 {*}{
+%	roomtemp2	&deg;C	"Room temperature 2"
+%	boilertemp2	&deg;C	"Boiler water temperature 2"
+%	setpoint2	&deg;C	"Room setpoint 2"
+%	dhwtemp2	&deg;C	"Domestic hot water temperature 2"
+%	controlsp2	&deg;C	"Control setpoint 2"
+%    }
 % }
 <table width="98%">
 % set col 0

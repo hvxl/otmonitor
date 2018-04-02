@@ -1,6 +1,13 @@
-% global track start graph theme timestamp
+% global track start gui graph graphdef theme timestamp
 % set now $timestamp
 % set maxx [expr {min(1440, ($now - $start) / 5.) + 25}]
+% if {[info exists graph]} {
+% } elseif {[info exists gui(ch2)] && $gui(ch2)} {
+%     set graph $graphdef
+% } else {
+%     # Remove the CH2 related parts
+%     set graph [dict remove $graphdef chmode2 temperature2]
+% }
 % # Calculate the height of the graph
 % set height 18
 % dict for {name dict} $graph {
@@ -83,13 +90,22 @@
 <g class="legend">
 %         set h [expr {[dict size $line] * 14 - 3}]
 <rect x="22" y="$y" width="180" height="$h"/>
-%         dict for {name data} $line {
-%             set title [dict get $data name]
-%             set color [dict get $data color]
+%         if {[dict exists $dict name]} {
+%             set title [dict get $dict name]
+%             set color [dict get $dict color]
 <circle cx="32" cy="$v" r="4" fill="$color"/>
 %             incr v 4
 <text x="40" y="$v" text-anchor="start" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$title</text>
 %             incr v 10
+%         } else {
+%             dict for {name data} $line {
+%                 set title [dict get $data name]
+%                 set color [dict get $data color]
+<circle cx="32" cy="$v" r="4" fill="$color"/>
+%                 incr v 4
+<text x="40" y="$v" text-anchor="start" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$title</text>
+%                 incr v 10
+%             }
 %         }
 </g>
 %     }

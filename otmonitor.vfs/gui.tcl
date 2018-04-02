@@ -55,7 +55,7 @@ proc gui::imglist {fn} {
 }
 
 proc gui::start {} {
-    global cfg
+    global cfg gui
     upvar #0 cfg(connection,type) devtype
 
     themeinit
@@ -114,7 +114,7 @@ proc gui::start {} {
     ttk::label .l10 -text "Relative modulation level"
     ttk::label .v10 -textvariable gui(modulation) -anchor e -width 6
     ttk::label .l11 -text "Room temperature"
-    ttk::label .v11 -textvariable gui(temperature) -anchor e -width 6
+    ttk::label .v11 -textvariable gui(roomtemp) -anchor e -width 6
     ttk::label .l12 -text "Room setpoint"
     ttk::label .v12 -textvariable gui(setpoint) -anchor e -width 6
     ttk::label .l13 -text "Return water temperature"
@@ -156,6 +156,43 @@ proc gui::start {} {
     grid .l8 .v8 -in .f3 -sticky we -padx 2 -pady 1
     grid .l21 .v21 -in .f3 -sticky we -padx 2 -pady 1
 
+    ttk::separator .sep-ch2
+    ttk::label .title-ch2 -text "CH circuit 2" -padding {4 0}
+
+    ttk::frame .f1-ch2
+    grid columnconfigure .f1-ch2 0 -weight 1
+    ttk::frame .f2-ch2
+    grid columnconfigure .f2-ch2 0 -weight 1
+    ttk::frame .f3-ch2
+    grid columnconfigure .f3-ch2 0 -weight 1
+    ttk::separator .sep1-ch2 -orient vertical
+    ttk::separator .sep2-ch2 -orient vertical
+
+    ttk::checkbutton .f1-ch2.v15 -class TLabel -style Indicator.TCheckbutton \
+      -variable gui(ch2mode) -text "Central heating mode "
+    ttk::checkbutton .f1-ch2.v19 -class TLabel -style Indicator.TCheckbutton \
+      -variable gui(ch2enable) -text "Central heating enable "
+    ttk::label .f2-ch2.l11 -text "Room temperature"
+    ttk::label .f2-ch2.v11 -textvariable gui(roomtemp2) -anchor e -width 6
+    ttk::label .f2-ch2.l12 -text "Room setpoint"
+    ttk::label .f2-ch2.v12 -textvariable gui(setpoint2) -anchor e -width 6
+    ttk::label .f3-ch2.l6 -text "Boiler water temperature"
+    ttk::label .f3-ch2.v6 -textvariable gui(boilertemp2) -anchor e -width 6
+    ttk::label .f3-ch2.l7 -text "Control setpoint"
+    ttk::label .f3-ch2.v7 -textvariable gui(controlsp2) -anchor e -width 6
+    ttk::label .f3-ch2.l18 -text "DHW temperature"
+    ttk::label .f3-ch2.v18 -textvariable gui(dhwtemp2) -anchor e -width 6
+
+    grid .f1-ch2.v15 -sticky we -padx 2 -pady 1
+    grid .f1-ch2.v19 -sticky we -padx 2 -pady 1
+
+    grid .f2-ch2.l11 .f2-ch2.v11 -sticky we -padx 2 -pady 1
+    grid .f2-ch2.l12 .f2-ch2.v12 -sticky we -padx 2 -pady 1
+
+    grid .f3-ch2.l6 .f3-ch2.v6 -sticky we -padx 2 -pady 1
+    grid .f3-ch2.l7 .f3-ch2.v7 -sticky we -padx 2 -pady 1
+    grid .f3-ch2.l18 .f3-ch2.v18 -in .f3-ch2 -sticky we -padx 2 -pady 1
+
     ttk::separator .sep3
     
     ttk::notebook .nb
@@ -190,10 +227,18 @@ proc gui::start {} {
 
     grid .sep -padx 2 -sticky ew -columnspan 5
     grid .f1 .sep1 .f2 .sep2 .f3 -sticky ns -pady 2 -padx 4
+    grid .sep-ch2 .title-ch2 -column 0 -columnspan 5
+    grid .sep-ch2 -sticky ew -padx 2
+    grid .f1-ch2 .sep1-ch2 .f2-ch2 .sep2-ch2 .f3-ch2 -sticky nsew -pady 2 -padx 4
     grid .sep3 -padx 2 -sticky ew -columnspan 5
     grid .nb -columnspan 5 -sticky news -padx 8 -pady 8
     grid .sep4 -padx 2 -sticky ew -columnspan 5
     grid .bar -sticky ew -columnspan 5
+
+    # Do not show the CH2 information until its presence has been reported
+    grid remove {*}[lsearch -all -inline [winfo children .] *-ch2]
+    # Add a trace on the gui array to detect if a CH2 circuit is present
+    trace add variable gui write [namespace code ch2trace]
 
     update idletasks
     if {[info exists tab($cfg(view,tab))]} {
@@ -266,8 +311,6 @@ proc gui::start {} {
 	bind all <F7> [namespace code [list configdlg misc]]
     }
 
-    makegrid
-
     tk appname otmonitor
 
     wm protocol . WM_DELETE_WINDOW [namespace code finish]
@@ -276,6 +319,31 @@ proc gui::start {} {
 proc gui::finish {} {
     configsave
     exit
+}
+
+proc gui::ch2trace {var arg op} {
+    global gui
+    if {$arg in {ch2 roomtemp2 controlsp2 setpoint2 boilertemp2 dhwtemp2}} {
+	# Received some CH2 related info, so the trace is no longer needed
+	trace remove variable gui write [namespace code ch2trace]
+	if {$arg eq "ch2" && !$gui(ch2)} return
+	# Show the CH2 related information
+	chcircuit2
+    }
+}
+
+proc gui::chcircuit2 {{on 1}} {
+    global graph graphdef
+    if {$on} {
+	# Show the CH circuit 2 values
+	grid {*}[lsearch -all -inline [winfo children .] *-ch2]
+	set graph $graphdef
+    } else {
+	# Hide the CH circuit 2 values
+	grid remove {*}[lsearch -all -inline [winfo children .] *-ch2]
+	set graph [dict remove $graphdef chmode2 temperature2]
+    }
+    graphinit .nb.f2.c
 }
 
 proc gui::logframe {w} {
@@ -301,7 +369,8 @@ proc gui::logframe {w} {
 }
 
 proc gui::graphframe {w} {
-    global graph
+    global graph graphdef
+    set graph [dict remove $graphdef chmode2 temperature2]
     ttk::frame $w.f2 -style TEntry -borderwidth 2 -takefocus 0
     canvas $w.f2.c -background white -borderwidth 0 -highlightthickness 0 \
       -yscrollcommand [list $w.f2.vs set] -xscrollcommand [list $w.f2.hs set]
@@ -313,24 +382,54 @@ proc gui::graphframe {w} {
     grid $w.f2.hs x -sticky news
     grid columnconfigure $w.f2 $w.f2.c -weight 1
     grid rowconfigure $w.f2 $w.f2.c -weight 1
-    dict for {name data} $graph {
-	dict for {name dict} [dict get $data line] {
-	    set tags [list $name graph]
-	    set color [dict get $dict color]
-	    if {[dict get $data type] eq "polygon"} {
-    		$w.f2.c create polygon 0 -1 1 -1 -tags $tags \
-    		  -fill $color -outline $color
-	    } else {
-		$w.f2.c create line 0 -1 0 -1 -tags $tags -fill $color
-	    }
-	}
-    }
+    graphinit $w.f2.c
     bind $w.f2.c <1> [namespace code [list information $w.f2.c %x %y]]
     bind $w.f2.c <4> [list $w.f2.c yview scroll -1 unit]
     bind $w.f2.c <5> [list $w.f2.c yview scroll 1 unit]
     bind $w.f2.c <MouseWheel> \
       [format {%s yview scroll [expr {%%D/-abs(%%D)}] unit} $w.f2.c]
     return $w.f2
+}
+
+proc gui::graphinit {c} {
+    global graph height span period
+
+    $c delete graph
+    dict for {name data} $graph {
+	dict for {name dict} [dict get $data line] {
+	    set tags [list $name graph]
+	    set color [dict get $dict color]
+	    if {[dict get $data type] eq "polygon"} {
+    		$c create polygon 0 -1 1 -1 -tags $tags \
+    		  -fill $color -outline $color
+	    } else {
+		$c create line 0 -1 0 -1 -tags $tags -fill $color
+	    }
+	}
+    }
+
+    # Make the grid
+    global graph height span period
+    $c delete grid
+    set y 0
+    set x [expr {$span / $period}]
+    foreach n [dict keys $graph] {
+	incr y 8
+	dict with graph $n {
+    	    set origin [expr {$y + $max * $zoom}]
+	    for {set v $min} {$v <= $max} {incr v $scale} {
+		set i [expr {$origin - $v * $zoom}]
+		$c create line 0 $i $x $i -fill #eee -tags grid
+		$c create text -4 $i -text $v -anchor e -tags grid \
+		  -font Small -fill #000
+	    }
+	}
+	incr y [expr {round(($max - $min) * $zoom)}]
+    }
+    set height [incr y 16]
+    $c lower grid
+
+    scroll
 }
 
 proc gui::statsframe {w} {
@@ -476,29 +575,6 @@ proc gui::tvtrace {type msgid} {
     $tv set $id frequency [expr {round($sec / $count($type,$msgid))}]
     $tv set $id value $value($type,$msgid)
     if {$resort} {tvsort $tv $cfg(view,sort)}
-}
-
-proc gui::makegrid {} {
-    global graph height span period
-    .nb.f2.c delete grid
-    set y 0
-    set x [expr {$span / $period}]
-    dict for {name data} $graph {
-	incr y 8
-	dict with data {
-    	    set origin [expr {$y + $max * $zoom}]
-	    for {set v $min} {$v <= $max} {incr v $scale} {
-		set i [expr {$origin - $v * $zoom}]
-		.nb.f2.c create line 0 $i $x $i -fill #eee -tags grid
-		.nb.f2.c create text -4 $i -text $v -anchor e -tags grid \
-		  -font Small -fill #000
-	    }
-	}
-	incr y [expr {round(($max - $min) * $zoom)}]
-    	dict set graph $name origin $origin
-    }
-    set height [incr y 16]
-    .nb.f2.c lower grid
 }
 
 proc gui::scroll {} {

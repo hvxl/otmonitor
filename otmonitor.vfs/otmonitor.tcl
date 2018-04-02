@@ -90,6 +90,7 @@ array set learn {
 set xlate {
     airpresfault	"Air pressure fault"
     boilertemp		"Boiler water temperature"
+    boilertemp2		"Boiler water temperature 2"
     ch2enable		"Central heating 2 enable"
     ch2mode		"Central heating 2 mode"
     chenable		"Central heating enable"
@@ -97,6 +98,7 @@ set xlate {
     chwsetpoint		"Central heating setpoint"
     pressure		"CH water pressure"
     controlsp		"Control setpoint"
+    controlsp2		"Control setpoint 2"
     coolingenable	"Cooling enable"
     coolingstatus	"Cooling status"
     diag		"Diagnostic indication"
@@ -104,6 +106,7 @@ set xlate {
     dhwmode		"Domestic hot water mode"
     dhwsetpoint		"Domestic hot water setpoint"
     dhwtemp		"Domestic hot water temp"
+    dhwtemp2		"Domestic hot water temp 2"
     fault		"Fault indication"
     flame		"Flame"
     flamefault		"Gas/flame fault"
@@ -117,25 +120,39 @@ set xlate {
     override    	"Rem override room setpoint"
     returntemp		"Return water temperature"
     setpoint		"Room setpoint"
-    temperature		"Room temperature"
+    setpoint2		"Room setpoint 2"
+    roomtemp		"Room temperature"
+    roomtemp2		"Room temperature 2"
     service		"Service request"
     timestamp		"Time stamp"
     overtemp		"Water over-temperature"
 }
 
 # Graph definitions used by both gui and web
-set graph {
+set graphdef {
     dhwmode {
 	origin 0 type polygon min 0 max 1 scale 2 zoom 12 format {%s}
 	line {
+	    dhwenable	{color #ccf name "Domestic hot water enable"}
 	    dhwmode	{color #00f name "Domestic hot water mode"}
 	}
+	color #00f name "Domestic hot water"
     }
     chmode {
 	origin 0 type polygon min 0 max 1 scale 2 zoom 12 format {%s}
 	line {
+	    chenable	{color #cfc name "Central heating enable"}
 	    chmode	{color #0c0 name "Central heating mode"}
 	}
+	color #0c0 name "Central heating"
+    }
+    chmode2 {
+	origin 0 type polygon min 0 max 1 scale 2 zoom 12 format {%s}
+	line {
+	    ch2enable	{color #cf4 name "Central heating 2 enable"}
+	    ch2mode	{color #8c0 name "Central heating 2 mode"}
+	}
+	color #8c0 name "Central heating 2"
     }
     flame {
 	origin 0 type polygon min 0 max 1 scale 2 zoom 12 format {%s}
@@ -159,7 +176,19 @@ set graph {
 	    dhwtemp	{color #f80 name "DHW temperature"}
 	    setpoint	{color #0cc name "Room setpoint"}
 	    outside	{color #0c0 name "Outside temperature"}
-	    temperature	{color #c0c name "Room temperature"}
+	    roomtemp	{color #c0c name "Room temperature"}
+	}
+    }
+    temperature2 {
+	origin 0 type line min -20 max 92 scale 5 zoom 4 format "%.2f\u00b0C"
+	line {
+	    controlsp2	{color #ccc name "Control setpoint"}
+	    returntemp2	{color #00f name "Return water temperature"}
+	    boilertemp2	{color #f00 name "Boiler water temperature"}
+	    dhwtemp2	{color #f80 name "DHW temperature"}
+	    setpoint2	{color #0cc name "Room setpoint"}
+	    outside2	{color #0c0 name "Outside temperature"}
+	    roomtemp2	{color #c0c name "Room temperature"}
 	}
     }
 }
@@ -191,17 +220,26 @@ set signals {
     HotWater			{on		boolean}
     CentralHeating		{on		boolean}
     Fault			{on		boolean}
+    Diagnostic			{on		boolean}
+    Cooling			{on		boolean}
+    CentralHeating2		{on		boolean}
+    Electricity			{on		boolean}
     RoomTemperature		{temp		float}
+    RoomTemperature2		{temp		float}
     OutsideTemperature		{temp		float}
     Setpoint			{temp		float}
+    Setpoint2			{temp		float}
     ControlSetpoint		{temp		float}
+    ControlSetpoint2		{temp		float}
     DHWEnable			{on		boolean}
     DHWSetpoint			{temp		float}
     DHWTemperature		{temp		float}
+    DHWTemperature2		{temp		float}
     CHEnable			{on		boolean}
     CHSetpoint			{temp		float}
     Modulation			{level		float}
     BoilerWaterTemperature	{temp		float}
+    BoilerWaterTemperature2	{temp		float}
     ReturnWaterTemperature	{temp		float}
     CHWaterPresure		{bar		float}
     RemoteOverrideRoomSetpoint	{temp		float}
@@ -763,9 +801,10 @@ proc slavestatus {list} {
     guiflag chmode [expr {([lindex $list 1] & 2) != 0}] centralheating
     guiflag dhwmode [expr {([lindex $list 1] & 4) != 0}] hotwater
     guiflag flame [expr {([lindex $list 1] & 8) != 0}] flame
-    guiflag coolingstatus [expr {([lindex $list 1] & 16) != 0}]
-    guiflag ch2mode [expr {([lindex $list 1] & 32) != 0}]
-    guiflag diag [expr {([lindex $list 1] & 64) != 0}]
+    guiflag coolingstatus [expr {([lindex $list 1] & 16) != 0}] cooling
+    guiflag ch2mode [expr {([lindex $list 1] & 32) != 0}] centralheating2
+    guiflag diag [expr {([lindex $list 1] & 64) != 0}] diagnostic
+    guiflag electricity [expr {([lindex $list 1] & 128) != 0}] electricity
     return 0
 }
 
@@ -774,6 +813,25 @@ proc masterconfig {list} {
 	"Smart power" {"not supported" supported}
     } {
     } $list
+    return 0
+}
+
+proc slaveconfig {list} {
+    reportflags {
+	"DHW"	    			{"not present" present}
+	"Control type"			{modulating on/off}
+	"Cooling"   			{"not supported" supported}
+	"DHW"	    			{instantaneous "storage tank"}
+	"Master pump control"		{allowed "not allowed"}
+	"CH2"		    		{"not present" present}
+	"Remote water filling"		{available/unknown "not available"}
+	"Heat/cool mode control"	{heat cool}
+    } {
+    } $list
+    lassign $list flags vendor
+    guiflag ch2 [expr {($flags & 32) != 0}]
+    ### For testing !!!
+    # guiflag ch2 [expr {($flags & 64) != 0}]
     return 0
 }
 
@@ -1654,7 +1712,7 @@ array set cfg {
     tspeak,interval	120
     tspeak,sync		false
     tspeak,key		""
-    tspeak,field1	temperature
+    tspeak,field1	roomtemp
     tspeak,field2	setpoint
     tspeak,field3	boilertemp
     tspeak,field4	returntemp
@@ -1671,7 +1729,7 @@ set cfg(datalog,itemlist) {
     diag
     fault
     outside
-    temperature
+    roomtemp
     setpoint
     modulation
     boilertemp
@@ -1779,17 +1837,7 @@ special 0 0 masterstatus
 special 4 0 slavestatus
 special 1 2 masterconfig
 special 5 2 masterconfig
-special 4 3 reportflags {
-    "DHW"			{"not present" present}
-    "Control type"		{modulating on/off}
-    "Cooling"			{"not supported" supported}
-    "DHW"			{instantaneous "storage tank"}
-    "Master pump control"	{allowed "not allowed"}
-    "CH2"			{"not present" present}
-    "Remote water filling"	{available/unknown "not available"}
-    "Heat/cool mode control"	{heat cool}
-} {
-}
+special 4 3 slaveconfig
 special 4 5 asfflags
 special 4 6 reportflags {
     "DHW setpoint transfer"	{disabled enabled}
@@ -1844,6 +1892,7 @@ special 4 103 reportflags {
 }
 
 special 1 1 guifloat controlsp controlsetpoint
+special 1 8 guifloat controlsp2 controlsetpoint2
 special 4 9 guifloat override remoteoverrideroomsetpoint
 special 1 56 guifloat dhwsetpoint dhwsetpoint
 special 4 56 guifloat dhwsetpoint dhwsetpoint
@@ -1851,8 +1900,10 @@ special 1 57 guifloat chwsetpoint chsetpoint
 special 4 57 guifloat chwsetpoint chsetpoint
 special 4 17 guifloat modulation modulation
 special 1 14 guifloat maxmod
-special 1 24 guifloat temperature roomtemperature
+special 1 24 guifloat roomtemp roomtemperature
+special 1 37 guifloat roomtemp2 roomtemperature2
 special 1 16 guifloat setpoint setpoint
+special 1 23 guifloat setpoint2 setpoint2
 special 4 28 guifloat returntemp returnwatertemperature
 special 1 27 readwrite 1 guifloat outside outsidetemperature
 special 4 27 readwrite 4 guifloat outside outsidetemperature
@@ -1860,7 +1911,9 @@ special 5 27 readwrite 5 guifloat outside outsidetemperature
 special 7 27 readwrite 7 guifloat outside outsidetemperature
 special 4 18 guifloat pressure chwaterpresure
 special 4 25 guifloat boilertemp boilerwatertemperature
+special 4 31 guifloat boilertemp2 boilerwatertemperature2
 special 4 26 guifloat dhwtemp dhwtemperature
+special 4 32 guifloat dhwtemp2 dhwtemperature2
 special 7 17 unknownid modulation
 special 7 28 unknownid returntemp
 special 7 18 unknownid pressure

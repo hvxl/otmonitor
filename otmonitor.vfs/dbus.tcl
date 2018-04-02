@@ -68,21 +68,28 @@ dbif method / Report {} list:a{sv} {
     set rc {}
     foreach {name var sig} {
 	BoilerWaterTemperature	boilertemp	d
+	BoilerWaterTemperature2	boilertemp2	d
 	CHEnable		chenable	b
+	CH2Enable		ch2enable	b
 	CHSetpoint		chsetpoint	d
 	CentralHeating		chmode		b
+	CentralHeating2		ch2mode		b
 	ControlSetpoint		controlsp	d
+	ControlSetpoint2	controlsp2	d
 	DHWEnable		dhwenable	b
 	DHWSetpoint		dhwsetpoint	d
 	DHWTemperature		dhwtemp		d
+	DHWTemperature2		dhwtemp2	d
 	Fault			fault		b
 	Flame			flame		b
 	HotWater		dhwmode		b
 	Modulation		modulation	d
 	OutsideTemperature	outside		d
 	ReturnWaterTemperature	returntemp	d
-	RoomTemperature		temperature	d
+	RoomTemperature		roomtemp	d
+	RoomTemperature2	roomtemp2	d
 	Setpoint		setpoint	d
+	Setpoint2		setpoint2	d
     } {
 	if {[info exists gui($var)] && $gui($var) ne "???"} {
 	    dict set rc $name [list $sig $gui($var)]

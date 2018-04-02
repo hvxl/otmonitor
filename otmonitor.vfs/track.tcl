@@ -3,8 +3,8 @@ namespace eval track {
 }
 
 proc track::init {} {
-    global graph track
-    dict for {name data} $graph {
+    global graphdef track
+    dict for {name data} $graphdef {
 	foreach n [dict keys [dict get $data line]] {
 	    set track($n) {}
 	}
