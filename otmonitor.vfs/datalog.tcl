@@ -55,17 +55,17 @@ proc gui::datalog::gui {w} {
     bind $w.dat.f1.lb <<ListboxSelect>> [namespace code [list list1select $w]]
     bind $w.dat.f2.lb <<ListboxSelect>> [namespace code [list list2select $w]]
 
-    variable list1 "" list2 $cfg(datalog,itemlist)
-    foreach n [lsort -dictionary -indices [dict values $xlate]] {
-	set key [lindex [dict keys $xlate] $n]
-	if {$key ni $list2} {
-	    lappend list1 $key
-	    $w.dat.f1.lb insert end [dict get $xlate $key]
-	}
-    }
-    foreach n $list2 {
+    variable list2 [lmap n $cfg(datalog,itemlist) {
+	if {![dict exists $xlate $n]} continue
 	$w.dat.f2.lb insert end [dict get $xlate $n]
-    }
+	set n
+    }]
+    variable list1 [lmap n [lsort -dictionary -indices [dict values $xlate]] {
+	set key [lindex [dict keys $xlate] $n]
+	if {$key in $list2} continue
+	$w.dat.f1.lb insert end [dict get $xlate $key]
+	set key
+    }]
 }
 
 proc gui::datalog::state {win expr} {
@@ -128,7 +128,7 @@ proc gui::datalog::move {w dir} {
 	$w.dat.f2.lb delete end
 	$w.dat.f2.lb selection set $n
 	$w.dat.f2.lb see $n
-	if {$dir < 0} {incr n -1}
+	if {$dir > 0} {incr n -1}
 	set x [expr {$n + 1}]
 	set list2 [lreplace $list2 $n $x {*}[lreverse [lrange $list2 $n $x]]]
     }
