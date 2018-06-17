@@ -1900,7 +1900,7 @@ special 4 56 guifloat dhwsetpoint dhwsetpoint
 special 1 57 guifloat chwsetpoint chsetpoint
 special 4 57 guifloat chwsetpoint chsetpoint
 special 4 17 guifloat modulation modulation
-special 1 14 guifloat maxmod
+special 1 14 guifloat maxmod maxmodulation
 special 1 24 guifloat roomtemp roomtemperature
 special 1 37 guifloat roomtemp2 roomtemperature2
 special 1 16 guifloat setpoint setpoint
