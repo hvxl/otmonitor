@@ -238,6 +238,7 @@ set signals {
     CHEnable			{on		boolean}
     CHSetpoint			{temp		float}
     Modulation			{level		float}
+    MaxModulation		{level		float}	
     BoilerWaterTemperature	{temp		float}
     BoilerWaterTemperature2	{temp		float}
     ReturnWaterTemperature	{temp		float}
