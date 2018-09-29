@@ -244,15 +244,15 @@ set signals {
     ReturnWaterTemperature	{temp		float}
     CHWaterPresure		{bar		float}
     RemoteOverrideRoomSetpoint	{temp		float}
+    CHBurnerStarts		{count		integer}
+    CHPumpStarts		{count		integer}
+    DHWPumpStarts 		{count		integer}
+    DHWBurnerStarts 		{count		integer}
+    CHBurnerHours 		{count		integer}
+    CHPumpHours 		{count		integer}
+    DHWPumpHours 		{count		integer}
+    DHWBurnerHours 		{count		integer}
     GatewayReset		{}
-	chburnerstarts		{}
-	chpumpstarts		{}
-	dhwpumpstarts 		{}
-	hwburnerstarts 		{}
-	chburnerhours 		{}
-	chpumphours 		{}
-	dhwpumphours 		{}
-	dhwburnerhours 		{}
 }
 
 # Standard NRE helper proc
@@ -896,6 +896,15 @@ proc asfflags {list} {
 	set gui(faultcode) $value
     }
     return 0
+}
+
+proc returntemp {list} {
+    global gui
+    guifloat returntemp returnwatertemperature $list
+    if {[info exists gui(boilertemp)]} {
+	set gui(deltatemp) \
+	  [format %.2f [expr {$gui(boilertemp) - $gui(returntemp)}]]
+    }
 }
 
 proc readwrite {msgtype cmd name args} {
@@ -1899,6 +1908,7 @@ special 4 103 reportflags {
     "System type"		{"DHW preheat" "DHW parallel"}
 } {
 }
+special 4 28 returntemp
 
 special 1 1 guifloat controlsp controlsetpoint
 special 1 8 guifloat controlsp2 controlsetpoint2
@@ -1913,7 +1923,6 @@ special 1 24 guifloat roomtemp roomtemperature
 special 1 37 guifloat roomtemp2 roomtemperature2
 special 1 16 guifloat setpoint setpoint
 special 1 23 guifloat setpoint2 setpoint2
-special 4 28 guifloat returntemp returnwatertemperature
 special 1 27 readwrite 1 guifloat outside outsidetemperature
 special 4 27 readwrite 4 guifloat outside outsidetemperature
 special 5 27 readwrite 5 guifloat outside outsidetemperature
