@@ -238,12 +238,21 @@ set signals {
     CHEnable			{on		boolean}
     CHSetpoint			{temp		float}
     Modulation			{level		float}
+    MaxModulation		{level		float}	
     BoilerWaterTemperature	{temp		float}
     BoilerWaterTemperature2	{temp		float}
     ReturnWaterTemperature	{temp		float}
     CHWaterPresure		{bar		float}
     RemoteOverrideRoomSetpoint	{temp		float}
     GatewayReset		{}
+	chburnerstarts		{}
+	chpumpstarts		{}
+	dhwpumpstarts 		{}
+	hwburnerstarts 		{}
+	chburnerhours 		{}
+	chpumphours 		{}
+	dhwpumphours 		{}
+	dhwburnerhours 		{}
 }
 
 # Standard NRE helper proc
@@ -1899,7 +1908,7 @@ special 4 56 guifloat dhwsetpoint dhwsetpoint
 special 1 57 guifloat chwsetpoint chsetpoint
 special 4 57 guifloat chwsetpoint chsetpoint
 special 4 17 guifloat modulation modulation
-special 1 14 guifloat maxmod
+special 1 14 guifloat maxmod maxmodulation
 special 1 24 guifloat roomtemp roomtemperature
 special 1 37 guifloat roomtemp2 roomtemperature2
 special 1 16 guifloat setpoint setpoint
@@ -1921,14 +1930,14 @@ special 7 26 unknownid dhwtemp
 special 0 101 mastersolar
 special 4 101 slavesolar
 
-special 4 116 guishort chbs
-special 4 117 guishort chps
-special 4 118 guishort dhwps
-special 4 119 guishort dhwbs
-special 4 120 guishort chbh
-special 4 121 guishort chph
-special 4 122 guishort dhwph
-special 4 123 guishort dhwbh
+special 4 116 guishort chbs chburnerstarts
+special 4 117 guishort chps chpumpstarts
+special 4 118 guishort dhwps dhwpumpstarts
+special 4 119 guishort dhwbs dhwburnerstarts
+special 4 120 guishort chbh chburnerhours
+special 4 121 guishort chph chpumphours
+special 4 122 guishort dhwph dhwpumphours
+special 4 123 guishort dhwbh dhwburnerhours
 
 # Class 1: Control and Status Information
 register 0	{flag8 flag8}	"Status"
