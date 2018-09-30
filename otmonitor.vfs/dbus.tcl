@@ -29,7 +29,7 @@ if {[settings get debug dbusname] ne ""} {
 
 proc dbusinit {path def} {
     global dbussignal
-    set ch {boolean b string s float d byte y integer n unsigned u}
+    set ch {boolean b string s float d byte y integer n unsigned q}
     dict for {name arglist} $def {
 	set args {}
 	dict for {arg type} $arglist {

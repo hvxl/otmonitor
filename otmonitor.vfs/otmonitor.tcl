@@ -244,14 +244,15 @@ set signals {
     ReturnWaterTemperature	{temp		float}
     CHWaterPresure		{bar		float}
     RemoteOverrideRoomSetpoint	{temp		float}
-    CHBurnerStarts		{count		integer}
-    CHPumpStarts		{count		integer}
-    DHWPumpStarts 		{count		integer}
-    DHWBurnerStarts 		{count		integer}
-    CHBurnerHours 		{count		integer}
-    CHPumpHours 		{count		integer}
-    DHWPumpHours 		{count		integer}
-    DHWBurnerHours 		{count		integer}
+    CHWaterDeltaT		{temp		float}
+    CHBurnerStarts		{count		unsigned}
+    CHPumpStarts		{count		unsigned}
+    DHWPumpStarts 		{count		unsigned}
+    DHWBurnerStarts 		{count		unsigned}
+    CHBurnerHours 		{count		unsigned}
+    CHPumpHours 		{count		unsigned}
+    DHWPumpHours 		{count		unsigned}
+    DHWBurnerHours 		{count		unsigned}
     GatewayReset		{}
 }
 
@@ -902,8 +903,9 @@ proc returntemp {list} {
     global gui
     guifloat returntemp returnwatertemperature $list
     if {[info exists gui(boilertemp)]} {
-	set gui(deltatemp) \
-	  [format %.2f [expr {$gui(boilertemp) - $gui(returntemp)}]]
+	set value [format %.2f [expr {$gui(boilertemp) - $gui(returntemp)}]]
+	signal chwaterdeltat $value
+	set gui(deltatemp) $value
     }
 }
 
