@@ -90,19 +90,19 @@ proc gui::start {} {
     ttk::separator .sep1 -orient vertical
     ttk::separator .sep2 -orient vertical
     ttk::checkbutton .v1 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(dhwenable) -text "Domestic hot water enable "
+      -variable gui(dhwenable) -takefocus 0 -text "Domestic hot water enable "
     ttk::checkbutton .v2 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(dhwmode) -text "Domestic hot water mode "
+      -variable gui(dhwmode) -takefocus 0 -text "Domestic hot water mode "
     ttk::checkbutton .v3 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(fault) -text "Fault indication "
+      -variable gui(fault) -takefocus 0 -text "Fault indication "
     ttk::checkbutton .v4 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(flame) -text "Flame status "
+      -variable gui(flame) -takefocus 0 -text "Flame status "
     ttk::checkbutton .v5 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(diag) -text "Diagnostic indication "
+      -variable gui(diag) -takefocus 0 -text "Diagnostic indication "
     ttk::checkbutton .v15 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(chmode) -text "Central heating mode "
+      -variable gui(chmode) -takefocus 0 -text "Central heating mode "
     ttk::checkbutton .v19 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(chenable) -text "Central heating enable "
+      -variable gui(chenable) -takefocus 0 -text "Central heating enable "
     ttk::label .l6 -text "Boiler water temperature"
     ttk::label .v6 -textvariable gui(boilertemp) -anchor e -width 6
     ttk::label .l7 -text "Control setpoint"
@@ -354,7 +354,7 @@ proc gui::logframe {w} {
     lappend tabs [incr x [font measure TkDefaultFont "Unk-DataId  "]] left
     text $w.f1.t -yscrollcommand [list $w.f1.vs set] -background white \
       -relief flat -highlightthickness 0 -font TkDefaultFont -cursor "" \
-      -wrap none -tabs $tabs -state disabled
+      -wrap none -tabs $tabs -state disabled -takefocus 1
     $w.f1.t mark set cursor 1.0
     $w.f1.t tag configure write -foreground #000080
     $w.f1.t tag configure unknown -foreground #800080
@@ -364,6 +364,9 @@ proc gui::logframe {w} {
     grid $w.f1.t $w.f1.vs -sticky wnse
     grid columnconfigure $w.f1 $w.f1.t -weight 1
     grid rowconfigure $w.f1 $w.f1.t -weight 1
+    bind $w.f1.t <1> {focus %W}
+    bind $w.f1.t <Home> {%W yview moveto 0;break}
+    bind $w.f1.t <End> {%W yview moveto 1;break}
     bind $w.f1.t <<Selection>> [namespace code selection]
     return $w.f1
 }
@@ -372,7 +375,8 @@ proc gui::graphframe {w} {
     global graph graphdef
     set graph [dict remove $graphdef chmode2 temperature2]
     ttk::frame $w.f2 -style TEntry -borderwidth 2 -takefocus 0
-    canvas $w.f2.c -background white -borderwidth 0 -highlightthickness 0 \
+    canvas $w.f2.c -background white -borderwidth 0 \
+      -takefocus 1 -highlightthickness 0 \
       -yscrollcommand [list $w.f2.vs set] -xscrollcommand [list $w.f2.hs set]
     ttk::scrollbar $w.f2.vs -command [list $w.f2.c yview] -orient vertical
     ttk::scrollbar $w.f2.hs -command [list $w.f2.c xview] -orient horizontal
@@ -388,6 +392,15 @@ proc gui::graphframe {w} {
     bind $w.f2.c <5> [list $w.f2.c yview scroll 1 unit]
     bind $w.f2.c <MouseWheel> \
       [format {%s yview scroll [expr {%%D/-abs(%%D)}] unit} $w.f2.c]
+    bind $w.f2.c <Next> {%W yview scroll 1 page}
+    bind $w.f2.c <Prior> {%W yview scroll -1 page}
+    bind $w.f2.c <Home> {%W xview moveto 0}
+    bind $w.f2.c <End> {%W xview moveto 1}
+    bind $w.f2.c <Up> {%W yview scroll -1 unit}
+    bind $w.f2.c <Down> {%W yview scroll 1 unit}
+    bind $w.f2.c <Left> {%W xview scroll -1 unit}
+    bind $w.f2.c <Right> {%W xview scroll 1 unit}
+    
     return $w.f2
 }
 
