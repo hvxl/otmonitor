@@ -1,9 +1,14 @@
 namespace eval security {
     package require sqlite3
     variable cache {}
-    variable authdb [file join [file dirname $starkit::topdir] auth auth.db]
-    if {![file writable $authdb]} {
-	set authdb [file join [settings appdata] auth.db]
+    variable authdb
+    if {[info exists dbfile] && [file writable [file dirname $dbfile]]} {
+        set authdb $dbfile
+    } else {
+        set authdb [file join [file dirname $starkit::topdir] auth auth.db]
+        if {![file writable $authdb]} {
+            set authdb [file join [settings appdata] auth.db]
+        }
     }
     namespace ensemble create -subcommands {
 	getusers adduser deluser chguser vfyuser addcert delcert vfycert
@@ -28,10 +33,13 @@ proc security::permissions {file str} {
 }
 
 proc security::createdb {} {
+    global dbfile
     variable authdb
-    set authdir [file dirname $authdb]
-    file mkdir $authdir
-    permissions $authdir go-rwx
+    if {![info exists dbfile]} {
+        set authdir [file dirname $authdb]
+        file mkdir $authdir
+        permissions $authdir go-rwx
+    }
     authdb {
 	create table if not exists users (
 	  name text unique,
