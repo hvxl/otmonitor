@@ -1624,7 +1624,7 @@ getopt flag arg $argv {
 	set verbose 1
     }
     --dbfile:FILE {
-  set dbfile $arg
+	set dbfile $arg
     }
     -h - --help {
 	# display this help and exit.

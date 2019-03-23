@@ -3,12 +3,12 @@ namespace eval security {
     variable cache {}
     variable authdb
     if {[info exists dbfile] && [file writable [file dirname $dbfile]]} {
-        set authdb $dbfile
+	set authdb $dbfile
     } else {
-        set authdb [file join [file dirname $starkit::topdir] auth auth.db]
-        if {![file writable $authdb]} {
-            set authdb [file join [settings appdata] auth.db]
-        }
+	set authdb [file join [file dirname $starkit::topdir] auth auth.db]
+	if {![file writable $authdb]} {
+	    set authdb [file join [settings appdata] auth.db]
+	}
     }
     namespace ensemble create -subcommands {
 	getusers adduser deluser chguser vfyuser addcert delcert vfycert
@@ -19,7 +19,7 @@ proc security::authdb {script} {
     variable authdb
     sqlite3 [namespace current]::dbrw $authdb
     try {
-        uplevel 1 [list dbrw eval $script]
+	uplevel 1 [list dbrw eval $script]
     } finally {
 	dbrw close
     }
@@ -36,9 +36,9 @@ proc security::createdb {} {
     global dbfile
     variable authdb
     if {![info exists dbfile]} {
-        set authdir [file dirname $authdb]
-        file mkdir $authdir
-        permissions $authdir go-rwx
+	set authdir [file dirname $authdb]
+	file mkdir $authdir
+	permissions $authdir go-rwx
     }
     authdb {
 	create table if not exists users (
@@ -52,7 +52,7 @@ proc security::createdb {} {
 	  access text check (access in ("rw", "ro")),
 	  expires int,
 	  revoked int
-        );
+	);
     }
     permissions $authdb go-rw
 }
