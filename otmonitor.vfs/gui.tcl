@@ -1077,7 +1077,9 @@ proc gui::cfgleds {w} {
 
     ttk::labelframe $w.f2 -text LEDs
     foreach l {A B C D E F} {
-	set ledstr($l) [dict get $functions $led($l)]
+	if {[catch {dict get $functions $led($l)} ledstr($l)]} {
+	    set ledstr($l) ""
+	}
 	ttk::label $w.f2.l$l -text "LED $l:"
 	ttk::combobox $w.f2.b$l -width 32 -state readonly \
 	  -values [dict values $functions] -textvariable ledstr($l)
@@ -1099,10 +1101,14 @@ proc gui::cfgleds {w} {
 proc gui::cfgledstrace {var arg op} {
     if {$var eq "led"} {
 	global led ledstr functions
-	set ledstr($arg) [dict get $functions $led($arg)]
+	if {[catch {dict get $functions $led($arg)} ledstr($arg)]} {
+	    set ledstr($arg) ""
+	}
     } elseif {$var eq "gpio"} {
 	global gpio gpiostr gpiofunc
-	set gpiostr($arg) [dict get $gpiofunc $gpio($arg)]
+	if {[catch {dict get $gpiofunc $gpio($arg)} gpiostr($arg)]} {
+	    set gpiostr($arg) None
+	}
     }
 }
 
@@ -1710,7 +1716,11 @@ proc gui::cfgtspeak {w} {
 	ttk::label $w.f1.l$i -text "Field $i:"
 	ttk::combobox $w.f1.e$i -state readonly -width 28 \
 	  -values [dict values $dict]
-	$w.f1.e$i set [dict get $dict $cfg(tspeak,field$i)]
+	if {[dict exists $dict $cfg(tspeak,field$i)]} {
+	    $w.f1.e$i set [dict get $dict $cfg(tspeak,field$i)]
+	} else {
+	    $w.f1.e$i set 0
+	}
 	grid $w.f1.l$i $w.f1.e$i - -sticky w -padx 6 -pady 3
 	bind $w.f1.e$i <<ComboboxSelected>> \
 	  [namespace code [list cfgtspeakselect %W field$i]]
