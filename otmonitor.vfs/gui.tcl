@@ -73,6 +73,11 @@ proc gui::start {} {
 
     wm iconphoto . -default [img icon48.gif] [img icon.gif]
     set font [font actual TkDefaultFont]
+    # Due to bug 434d294df, size may come out as 0
+    # https://core.tcl-lang.org/tk/info/434d294df
+    if {[dict get $font -size] == 0} {
+	dict set font -size [expr {abs([font configure TkDefaultFont -size])}]
+    }
     set size [expr {round([dict get $font -size] * 0.8)}]
     font create Small {*}$font -size $size
     font create Bold {*}$font -weight bold
