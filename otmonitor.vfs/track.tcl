@@ -26,7 +26,8 @@ proc track::vartrace {var arg op} {
 	# Discard ancient history
 	set keep [expr {$timestamp - $span}]
 	set first 0
-	for {set i 0} {[lindex $track($arg) $i] < $keep} {incr i 2} {
+	for {set i 0} {$i < [llength $track($arg)] && \
+	  [lindex $track($arg) $i] < $keep} {incr i 2} {
 	    set first $i
 	}
 	if {$first > 0} {
