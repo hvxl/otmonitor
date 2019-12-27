@@ -13,12 +13,13 @@ namespace eval settings {
 proc settings::init {} {
     global argv0
     variable storage
+    variable author
     if {![catch {package require registry}]} {
 	set storage registry
 	if {[info exists starkit::topdir]} {
 	    # Extract the author from the tclkit.inf file.
 	    if {![catch {open [file join $starkit::topdir tclkit.inf]} fd]} {
-		catch {variable author [dict get [read $fd] CompanyName]}
+		catch {set author [dict get [read $fd] CompanyName]}
 		close $fd
 	    }
 	}
