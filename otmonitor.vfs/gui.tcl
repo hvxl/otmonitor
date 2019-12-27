@@ -261,7 +261,7 @@ proc gui::start {} {
       -command [namespace code upgradedlg]
     .m.file add separator
     .m.file add command -label "Diagnostics" -state $state \
-      -command {package require diagnostics;diagnostics}
+      -command diagnostics
     .m.file add separator
     .m.file add command -label Quit -command [namespace code finish]
     .m add cascade -label Edit -menu [menu .m.edit -tearoff 0]

@@ -390,8 +390,7 @@ proc process {line} {
 	incr error($errno)
 	signal error $errno
     } elseif {[scan $line {Opentherm gateway diagnostics - Version %s} ver] == 1} {
-	package require diagnostics
-	diagnostics $ver
+	gui diagnostics $ver
 	output "[ts]\t$line"
     } elseif {[set x [string first "OpenTherm Gateway " $line]] >= 0} {
 	if {$x == 0 || [string index $line [expr {$x - 1}]] ne "="} {
@@ -1811,6 +1810,12 @@ if {$cfg(connection,type) eq "file"} {
 
 # Create a stub for all gui operations
 proc gui args {}
+
+proc diagnostics {{ver ""}} {
+    rename diagnostics {}
+    package require diagnostics
+    tailcall diagnostics $ver
+}
 
 if {$firmware eq ""} {
     # Start tracking values
