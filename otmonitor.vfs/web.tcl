@@ -391,7 +391,23 @@ foreach n $docpath {
     # Rewrite directory requests to search for an indexfile
     wibble handle / indexfile root $n indexfile index.html
     wibble handle / indexfile root $n indexfile status.html
+}
 
+# Define file types
+wibble handle / contenttype typetable {
+    application/javascript	^js$
+    application/json		^json$
+    image/gif			^gif$
+    image/jpeg			^(?:jp[eg]|jpeg)$
+    image/png			^png$
+    image/svg+xml		^svg$
+    text/css			^css$
+    text/html			^html?$
+    text/plain			^txt$
+    text/xml			^xml$
+}
+
+foreach n $docpath {
     # Send static files
     wibble handle / staticfile root $n
 
@@ -419,20 +435,6 @@ wibble handle /message.ws websocket handler message
 
 # Send a 404 Not Found
 wibble handle / notfound
-
-# Define file types
-wibble handle / contenttype typetable {
-    application/javascript	^js$
-    application/json		^json$
-    image/gif			^gif$
-    image/jpeg			^(?:jp[eg]|jpeg)$
-    image/png			^png$
-    image/svg+xml		^svg$
-    text/css			^css$
-    text/html			^html?$
-    text/plain			^txt$
-    text/xml			^xml$
-}
 
 # Create a json representation of various bits of information
 #
