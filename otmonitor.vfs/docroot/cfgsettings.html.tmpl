@@ -36,7 +36,7 @@ data bytes</label>
 <table>
 <tr>
 <td width="*" class="fill">
-<input type="range" id="vref" onchange="vref(this)" value="[get voltref 3]" min="0" max="9" list="vrefvals">
+<input type="range" id="voltref" onchange="vref(this)" value="[get voltref 3]" min="0" max="9" list="vrefvals">
 <datalist id="vrefvals">
 <option>0</option>
 <option>1</option>
@@ -64,7 +64,7 @@ data bytes</label>
 <table>
 <tr>
 <td width="*" class="fill">
-<input type="range" id="setpt1" onchange="sync(this, 'setpt2')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
+<input type="range" id="setback" onchange="sync(this, 'setbackstr')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
 <datalist id="tickmarks">
 <option>5</option>
 <option>6</option>
@@ -95,7 +95,7 @@ data bytes</label>
 </datalist>
 </td>
 <td width="10%" class="fill">
-<input type="number" id="setpt2" onchange="sync(this, 'setpt1')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
+<input type="number" id="setbackstr" onchange="sync(this, 'setback')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
 </td>
 <td width="5%" class="fill">
 <button onclick="setpoint('setpt1', 'SB')">Set</button>

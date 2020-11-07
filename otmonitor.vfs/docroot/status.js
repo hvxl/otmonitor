@@ -103,6 +103,10 @@ function change(id, value) {
 		e.value = value;
 		//e.onchange();
 	    }
+	    if (e.type == "range") {
+		e.value = value;
+		e.onchange();
+	    }
 	    break;
 	  case "SELECT":
 	    if (e.className == "dict") {
