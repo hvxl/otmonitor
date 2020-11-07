@@ -1742,6 +1742,7 @@ array set cfg {
     tspeak,field6	modulation
     tspeak,field7	""
     tspeak,field8	""
+    firmware,hexfile	""
 }
 set cfg(datalog,itemlist) {
     flame

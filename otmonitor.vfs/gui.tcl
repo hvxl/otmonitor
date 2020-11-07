@@ -1816,14 +1816,14 @@ proc gui::connection {} {
 }
 
 proc gui::upgradedlg {} {
-    global hexfile eeprom
+    global cfg eeprom
     destroy .fw
     toplevel .fw
     wm title .fw "Firmware upgrade"
     wm transient .fw .
     place [ttk::frame .fw.bg] -relheight 1 -relwidth 1
     ttk::label .fw.l3a -text "Firmware file:"
-    ttk::entry .fw.fn3 -textvariable hexfile
+    ttk::entry .fw.fn3 -textvariable cfg(firmware,hexfile)
     ttk::button .fw.b3 -text ... -width 0 -command [namespace code hexfile]
     ttk::label .fw.l1a -text "Code memory:"
     ttk::progressbar .fw.pb1 -length 400 -maximum 4096 -variable csize
@@ -1857,8 +1857,9 @@ proc gui::upgradedlg {} {
     grid .fw.l6b - - -padx 2 -pady 0 -sticky ew
     ::tk::PlaceWindow .fw widget .
     fwstatus "Please select a firmware file"
-    catch {readhex $hexfile}
-    bind .fw.fn3 <Return> [namespace code {catch {readhex $hexfile}}]
+    catch {readhex $cfg(firmware,hexfile)}
+    bind .fw.fn3 <Return> \
+      [namespace code {catch {readhex $cfg(firmware,hexfile)}}]
     grab .fw
     if {![info exists eeprom]} {grid remove .fw.bb1}
 }
@@ -1869,9 +1870,9 @@ proc gui::showsettings {} {
 }
 
 proc gui::hexfile {} {
-    global hexfile
-    set dir [file dirname [append hexfile ""]]
-    set name [file tail $hexfile]
+    global cfg
+    set dir [file dirname [append cfg(firmware,hexfile) ""]]
+    set name [file tail $cfg(firmware,hexfile)]
     set types {
         {"Firmware files"       .hex}
         {"All files"            *}
@@ -1880,8 +1881,8 @@ proc gui::hexfile {} {
       -initialdir $dir -initialfile $name -parent .fw \
       -title "Choose firmware file"]
     if {$name ne ""} {
-        set hexfile $name
-        readhex $hexfile
+        set cfg(firmware,hexfile) $name
+        readhex $cfg(firmware,hexfile)
     }
 }
 
