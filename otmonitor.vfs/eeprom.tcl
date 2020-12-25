@@ -19,8 +19,8 @@ proc gui::eeprom::gui {w} {
     pack $w.set.b1 -side bottom -pady 4
     pack $w.set.t -fill both -expand 1 -padx 4 -pady 4
     foreach n {
-	SavedSettings FunctionGPIO AwaySetpoint FunctionLED ThermostatModel
-	AlternativeCmd UnknownFlags
+	SavedSettings Configuration FunctionGPIO AwaySetpoint
+	FunctionLED ThermostatModel AlternativeCmd UnknownFlags
     } {
 	if {[dict exists $eeprom $n value]} {
 	    [string tolower $n] $w.set.t [dict get $eeprom $n]
@@ -107,4 +107,23 @@ proc gui::eeprom::unknownflags {w data} {
     binary scan [binary format c* [dict get $data value]] b* bits
     set list [lsearch -all -exact [split $bits ""] 1]
     $w insert end "Blocked MessageIDs:\t[join $list {, }]\n"
+}
+
+proc gui::eeprom::configuration {w data} {
+    set val [dict get $data value]
+    set mask [if {[dict exists $data mask]} {dict get $data mask} {expr 0xff}]
+
+    set gwmodes {Monitor Gateway}
+    set dhwmodes {
+	"Comfort mode"
+	"Economy mode"
+	"Thermostat controlled"
+    }
+    set dhw [expr {$val & 0x10 ? !($val & 0x20) : 2}]
+    # Only report the operating mode if it was transferred.
+    if {$mask & 1} {
+	set gw [expr {!($val & 1)}]
+	$w insert end "Operating mode:\t[lindex $gwmodes $gw]\n"
+    }
+    $w insert end "Comfort setting:\t[lindex $dhwmodes $dhw]\n"
 }

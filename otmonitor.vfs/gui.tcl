@@ -1887,7 +1887,7 @@ proc gui::hexfile {} {
 }
 
 proc gui::readhex {file} {
-    global csize dsize devtype restore
+    global csize dsize devtype
     .fw.l1b configure -text ""
     .fw.l2b configure -text ""
     .fw.f4.b1 state disabled

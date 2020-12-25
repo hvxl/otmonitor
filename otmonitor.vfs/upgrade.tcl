@@ -490,6 +490,10 @@ proc upgrade::eeprom {version} {
 	    address	0x0d
 	    size	1
 	}
+	Configuration {
+	    address	0x0e
+	    size	1
+	}
 	UnknownFlags {
 	    address	0xd0
 	    size	16
@@ -554,6 +558,15 @@ proc upgrade::eeprom {version} {
     } elseif {![package vsatisfies $version 4.1-]} {
 	dict unset rc ThermostatModel
     }
+
+    # A second settings byte (Configuration) was introduced in firmware 4.2.7
+    if {![package vsatisfies $version 4.2.7-]} {
+	dict unset rc Configuration
+    } elseif {![package vsatisfies $version 4.2.8-]} {
+	# In firmware 4.2.7, there may be irrelevant stray bits
+	dict set rc Configuration mask 0x30
+    }
+
     return $rc
 }
 
@@ -588,9 +601,16 @@ proc upgrade::restore {old new data} {
 	    set m1 [lindex $mask1 $i]
 	    set m2 [lindex $mask2 $i]
 	    if {$m1 ne "" || $m2 ne ""} {
-		if {$m1 eq ""} {set m1 0xff}
-		if {$m2 eq ""} {set m2 0xff}
-		set oldbyte [expr {$oldbyte & $m2 | $newbyte & ~$m1}]
+		# Only transfer the bits that fall inside both masks
+		if {$m1 eq ""} {
+		    set mask $m2
+		} elseif {$m2 eq ""} {
+		    set mask $m1
+		} else {
+		    set mask [expr {$m1 & $m2}]
+		}
+		set oldbyte [expr {$oldbyte & $mask | $newbyte & ~$mask}]
+		dict set eeprom $name mask $mask
 	    }
 	    lappend value $oldbyte
 	    if {$newbyte != $oldbyte} {

@@ -3,7 +3,7 @@
 # Opentherm monitor utility.
 # For more information, see http://otgw.tclcode.com/otmonitor.html
 
-set version 4.3.0.2
+set version 4.4
 set reportflags 0
 set appendlog 0
 set setpt 20.00
@@ -394,11 +394,13 @@ proc process {line} {
 	output "[ts]\t$line"
     } elseif {[set x [string first "OpenTherm Gateway " $line]] >= 0} {
 	if {$x == 0 || [string index $line [expr {$x - 1}]] ne "="} {
+	    set reset 1
 	    status "Gateway reset" 5000
 	    signal gatewayreset
-	    gwmode 1
 	    # Assume thermostat is connected unless told otherwise
 	    after 50 {signal thermostat 1}
+	} else {
+	    set reset 0
 	}
 	output "[ts]\t$line"
 	response $line
@@ -407,12 +409,16 @@ proc process {line} {
 	    if {![catch {package vcompare $gwver $gwver}]} {
 		# Send the time when the gateway version was not yet known,
 		# or after a reset of the gateway
-		if {$gwversion eq "0" || ![string match {PR: A=*} $line]} {
+		if {$gwversion eq "0" || $reset} {
 		    global cfg
 		    if {$cfg(clock,auto)} {sync 1}
 		}
 		set gwversion $gwver
 	    }
+	}
+	if {$reset && ![package vsatisfies $gwversion 4.2.8-]} {
+	    # Before firmware 4.2.8, the OTGW is in gateway mode after a reset
+	    gwmode 1
 	}
     } elseif {[string match {*WDT reset!*} $line]} {
 	output "[ts]\t$line"
