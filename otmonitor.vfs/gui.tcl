@@ -1816,7 +1816,7 @@ proc gui::connection {} {
 }
 
 proc gui::upgradedlg {} {
-    global cfg eeprom
+    global eeprom
     destroy .fw
     toplevel .fw
     wm title .fw "Firmware upgrade"
@@ -1856,12 +1856,26 @@ proc gui::upgradedlg {} {
     grid .fw.sep - - -padx 2 -sticky ew
     grid .fw.l6b - - -padx 2 -pady 0 -sticky ew
     ::tk::PlaceWindow .fw widget .
-    fwstatus "Please select a firmware file"
-    catch {readhex $cfg(firmware,hexfile)}
+    coroutine upgradecoro upgradeinit
     bind .fw.fn3 <Return> \
       [namespace code {catch {readhex $cfg(firmware,hexfile)}}]
     grab .fw
     if {![info exists eeprom]} {grid remove .fw.bb1}
+}
+
+proc gui::upgradeinit {} {
+    global cfg gwversion
+    fwstatus "Determining current firmware ..."
+    # Attempt to determine the firmware version, if it is not yet known"
+    tk busy hold .fw
+    while {$gwversion eq "0" && [incr try] <= 3} {
+	set result [sercmd PR=A "" 500]
+    }
+    if {[tk busy current .fw] ne ""} {
+	tk busy forget .fw
+    }
+    fwstatus "Please select a firmware file"
+    catch {readhex $cfg(firmware,hexfile)}
 }
 
 proc gui::showsettings {} {

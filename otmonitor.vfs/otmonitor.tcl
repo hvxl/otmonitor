@@ -403,7 +403,6 @@ proc process {line} {
 	    set reset 0
 	}
 	output "[ts]\t$line"
-	response $line
 	if {[scan [string range $line $x end] {%*s %*s %s} gwver] == 1} {
 	    # Make sure a valid version number was found
 	    if {![catch {package vcompare $gwver $gwver}]} {
@@ -420,6 +419,7 @@ proc process {line} {
 	    # Before firmware 4.2.8, the OTGW is in gateway mode after a reset
 	    gwmode 1
 	}
+	response $line
     } elseif {[string match {*WDT reset!*} $line]} {
 	output "[ts]\t$line"
 	alert watchdogtimer
@@ -1121,7 +1121,7 @@ proc tryconnect {{w .}} {
     }
 }
 
-proc sercmd {cmd {details ""}} {
+proc sercmd {cmd {details ""} {timeout 2000}} {
     global dev sercmd devtype
     if {![info exists dev]} {
 	status "Error: Not connected" 5000
@@ -1152,7 +1152,7 @@ proc sercmd {cmd {details ""}} {
 	    lappend sercmd [list $pat $coro $ms]
 	    after cancel cancel
 	    set first [lindex $sercmd 0 2]
-	    after [expr {$first + 2000 - $ms}] cancel
+	    after [expr {$first + $timeout - $ms}] cancel
 	    return [yield]
 	}
     }
@@ -1160,11 +1160,15 @@ proc sercmd {cmd {details ""}} {
 
 proc cancel {} {
     global sercmd
-    while {[llength $sercmd] > 0} {
-	if {[lindex $sercmd 0 2] < [clock milliseconds]} {
+    set now [clock milliseconds]
+    set i 0
+    while {[llength $sercmd] > $i} {
+	if {[lindex $sercmd 0 2] < $now} {
 	    set sercmd [lassign $sercmd rec]
 	    lassign $rec cmd coro ms
 	    $coro timeout
+	} else {
+	    incr i
 	}
     }
 }
