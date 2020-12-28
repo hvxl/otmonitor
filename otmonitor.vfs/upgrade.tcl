@@ -181,7 +181,6 @@ proc upgrade::cocmd {cmd len {data {}} {timeout 2000} {retries 3}} {
 	if {$ch != 15} {
 	    # Drain whatever rubbish was received before trying again
 	    while {$ch ne ""} {
-		puts "ch=$ch"
 	    	set ch [cogetch 100]
 	    }
 	    continue
@@ -190,6 +189,7 @@ proc upgrade::cocmd {cmd len {data {}} {timeout 2000} {retries 3}} {
 	    if {$ch eq ""} break
 	    if {$ch == 5} {set ch [cogetch]}
 	    lappend resp $ch
+	    if {[llength $resp] > 80} return
 	}
 	# Check the checksum
 	if {$ch == 4 && [checksum $resp] == 0} break
@@ -241,6 +241,8 @@ proc upgrade::loadhex {cmd} {
 	if {$ans ne "ok"} {return abort}
     }
     try {
+	# Lock the OTGW connection, preventing others from sending commands
+	if {![lock upgrade]} return
 	$cmd init
 	set handler [fileevent $dev readable]
 	set config [fconfigure $dev]
@@ -249,11 +251,13 @@ proc upgrade::loadhex {cmd} {
 	debug $err
 	$cmd status "Firmware update failed - not connected"
 	$cmd done
+	unlock upgrade
 	return failed
     } on error err {
 	debug $err
 	$cmd status "Firmware update failed - $err"
 	$cmd done
+	unlock upgrade
 	return failed
     }
     set retries 0
@@ -376,6 +380,7 @@ proc upgrade::loadhex {cmd} {
 	      [loadrow $first [lrange [dict get $mem code] $first $last]]
 	    $cmd progress $cocnt
 	    $cmd status "$retries retries, $errors errors"
+	    if {$retries > 100} {error "Too many retries: $retries"}
 	}
 	foreach n $data {
 	    lassign $n first last
@@ -395,6 +400,7 @@ proc upgrade::loadhex {cmd} {
 	    incr errors $mismatch
 	    $cmd progress $cocnt
 	    $cmd status "$retries retries, $errors errors"
+	    if {$retries > 100} {error "Too many retries: $retries"}
 	}
 	debug $cocnt:$cocmd
 	set cocmd $cocnt
@@ -408,7 +414,7 @@ proc upgrade::loadhex {cmd} {
 	return success
     } on error err {
 	debug $err
-	puts stderr $::errorInfo
+	# puts stderr $::errorInfo
 	$cmd status "Firmware update failed - $errors errors"
 	return failed
     } finally {
@@ -417,6 +423,7 @@ proc upgrade::loadhex {cmd} {
 	# Get a fresh new connection
 	catch {connect reconnect}
 	$cmd done
+	unlock upgrade
     }
 }
 

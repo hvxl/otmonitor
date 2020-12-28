@@ -200,6 +200,7 @@ set interval 30000
 set tab 0
 set verbose 0
 set sercmd {}
+set lock ""
 set override ""
 set msglog {}
 
@@ -1121,12 +1122,31 @@ proc tryconnect {{w .}} {
     }
 }
 
+proc lock {id} {
+    global lock
+    if {$lock eq ""} {set lock $id}
+    return [expr {$lock eq $id}]
+}
+
+proc unlock {id} {
+    global lock
+    if {$lock eq $id} {set lock ""}
+    return [expr {$lock eq ""}]
+}
+
 proc sercmd {cmd {details ""} {timeout 2000}} {
-    global dev sercmd devtype
+    global dev sercmd devtype lock
     if {![info exists dev]} {
 	status "Error: Not connected" 5000
     } elseif {$devtype eq "file"} {
 	# Can't send a command to a file
+    } elseif {$lock ne ""} {
+	# Serial port locked
+	if {$details ne ""} {
+	    output "[ts]\tIgnored ($details): $cmd"
+	} else {
+	    output "[ts]\tIgnored: $cmd"
+	}
     } elseif {[catch {puts $dev $cmd} err]} {
         status "Error: [string toupper $err 0 0]" 5000
     } else {
