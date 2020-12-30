@@ -25,7 +25,7 @@ namespace eval gui {
 	frequency	integer
 	value		dictionary
     }
-    variable widget {}
+    variable widget {} history {} histpos 0
 
     namespace ensemble create -unknown ::gui::passthrough \
       -subcommands {output tvtrace connected scroll}
@@ -759,6 +759,35 @@ proc gui::voltref {} {
     sercmd [format {VR=%d} $voltref]
 }
 
+proc gui::command {cmd} {
+    global command
+    variable history
+    if {$cmd ne ""} {
+	sercmd $cmd
+	if {$cmd ne [lindex $history end]} {
+	    lappend history $cmd
+	    # Keep a maximum of 1000 entries
+	    set history [lrange $history end-999 end]
+	}
+    }
+    variable histpos [llength $history]
+    set command ""
+}
+
+proc gui::history {w dir} {
+    global command
+    variable history
+    variable histpos
+    if {$dir eq "prev" && $histpos > 0} {
+	set command [lindex $history [incr histpos -1]]
+    } elseif {$dir eq "next" && $histpos < [llength $history]} {
+	set command [lindex $history [incr histpos]]
+    } else {
+	return
+    }
+    $w icursor end
+}
+
 proc gui::about {} {
     global version
     destroy .a
@@ -1005,8 +1034,11 @@ proc gui::cfggeneral {w} {
     ttk::labelframe $w.f2 -text "Free format command"
     ttk::entry $w.f2.e -textvariable command
     ttk::button $w.f2.b -text Send -width 5 \
-      -command [namespace code {sercmd $command}]
+      -command [namespace code {command $command}]
     bind $w.f2.e <Return> [list $w.f2.b invoke]
+    bind $w.f2.e <Up> [namespace code {history %W prev}]
+    bind $w.f2.e <Down> [namespace code {history %W next}]
+
     grid $w.f2.e $w.f2.b -sticky ew -pady 6 -padx {6 2}
     grid $w.f2.b -padx {2 6}
     grid columnconfigure $w.f2 $w.f2.e -weight 1
