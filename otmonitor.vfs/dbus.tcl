@@ -1,7 +1,6 @@
 # Create a DBus interface, if the dbus package is available
 
-if {[catch {package require dbus} err]} return
-package require dbif
+if {[catch {package require dbif} err]} return
 
 dbif default -bus $dbus -interface com.tclcode.otmonitor
 

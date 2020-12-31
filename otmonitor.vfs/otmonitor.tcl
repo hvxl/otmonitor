@@ -1016,16 +1016,40 @@ proc borked {name args} {
     surprise $info "Command $name was deleted unexpectedly"
 }
 
+proc socketresult {fd type} {
+    global devtype cfg
+    set error [fconfigure $fd -error]
+    if {$error ne ""} {
+	if {$type ne "reconnect"} {
+	    status [string toupper $error 0 0]
+	}
+	connect failed
+	connected false
+    } else {
+	fileevent $fd writable {}
+	fconfigure $fd -encoding binary
+	fconfigure $fd -blocking 0 -buffering line -translation {crlf cr}
+	fileevent $fd readable sockdata
+	set devtype socket
+	connect success
+	connected true
+	status ""
+	if {$type in {manual}} {set cfg(connection,enable) true}
+    }
+}
+
 proc connectcoro {type} {
     global dev cfg tcl_platform know devtype
     set delay {ms 7500 total 0 id ""}
     while 1 {
 	try {
 	    if {$cfg(connection,type) eq "tcp"} {
-		set dev [socket $cfg(connection,host) $cfg(connection,port)]
-		fconfigure $dev -encoding binary
-		fileevent $dev readable sockdata
-		set devtype socket
+		set dev \
+		  [socket -async $cfg(connection,host) $cfg(connection,port)]
+		fileevent $dev writable [list socketresult $dev $type]
+		if {$type ne "reconnect"} {
+		    status "Connecting ..."
+		}
 	    } elseif {$cfg(connection,type) eq "file"} {
 		set dev [open $cfg(connection,device)]
 		set devtype file
@@ -1045,16 +1069,18 @@ proc connectcoro {type} {
 		fileevent $dev readable receive
 		set devtype comport
 	    }
-	    if {$devtype ne "file"} {
+	    if {$devtype ni {none file}} {
 		fconfigure $dev -blocking 0 -buffering line -translation {crlf cr}
 	    }
 	} on ok {err errinfo} {
 	    # Forget everything we know, it may have changed
 	    array unset know
-	    connected true
-	    if {$type in {reconnect}} {status ""}
-	    if {$type in {manual}} {set cfg(connection,enable) true}
-	    while {[set type [yield]] ni {disconnect reconnect manual}} {}
+	    if {$devtype ne "none"} {
+		connected true
+		if {$type in {reconnect}} {status ""}
+		if {$type in {manual}} {set cfg(connection,enable) true}
+	    }
+	    while {[set ev [yield]] ni {disconnect reconnect manual failed}} {}
 	    # Make sure data is flushed before closing
 	    if {[catch {fconfigure $dev -blocking 1} err errinfo]} {
 		surprise $errinfo
@@ -1065,14 +1091,18 @@ proc connectcoro {type} {
 	    unset dev
 	    set devtype none
 	    connected false
-	    dict set delay ms 7500
-	    dict set delay total 0
+	    if {$ev ne "failed"} {
+		set type $ev
+		dict set delay ms 7500
+		dict set delay total 0
+	    }
 	    if {$type eq "disconnect"} {
 		set cfg(connection,enable) false
 		# Wait for a reconnect 
 		while {[set type [yield]] in {disconnect}} {}
 	    }
-	    continue
+	    if {$ev ne "failed"} continue
+	    set msg ""
 	} trap {POSIX ENOENT} {err errinfo} {
 	    set msg "Serial device does not exist"
 	} trap {POSIX EISDIR} {err errinfo} {
@@ -1084,7 +1114,7 @@ proc connectcoro {type} {
 	} trap {POSIX EHOSTUNREACH} {err errinfo} {
 	    set msg "Host is unreachable"
 	} on error {err errinfo} {
-	    set msg $err
+	    set msg [string toupper $err 0 0]
 	}
 	set devtype none
 	if {$type in {startup reconnect}} {
@@ -1099,11 +1129,11 @@ proc connectcoro {type} {
 	    }
 	}
 	while 1 {
-	    if {$type eq "manual"} {
+	    if {$type eq "manual" && $msg ne ""} {
 		# Return the result to the caller
 		set type [yieldto return -options $errinfo $msg]
 	    } else {
-		status $msg
+		if {$msg ne ""} {status $msg}
 		set type [yield]
 	    }
 	    after cancel [dict get $delay id]
@@ -1136,7 +1166,7 @@ proc unlock {id} {
 
 proc sercmd {cmd {details ""} {timeout 2000}} {
     global dev sercmd devtype lock
-    if {![info exists dev]} {
+    if {$devtype eq "none" || ![info exists dev]} {
 	status "Error: Not connected" 5000
     } elseif {$devtype eq "file"} {
 	# Can't send a command to a file
