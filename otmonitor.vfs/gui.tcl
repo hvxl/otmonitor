@@ -1923,7 +1923,12 @@ proc gui::upgradedlg {} {
     grid .fw.bb1 -column 2 -row 5
     grid .fw.sep - - -padx 2 -sticky ew
     grid .fw.l6b - - -padx 2 -pady 0 -sticky ew
+
     ::tk::PlaceWindow .fw widget .
+    .fw.fn3 icursor end
+    .fw.fn3 xview end
+    focus .fw.fn3
+
     coroutine upgradecoro upgradeinit
     bind .fw.fn3 <Return> \
       [namespace code {catch {readhex $cfg(firmware,hexfile)}}]
@@ -1942,8 +1947,11 @@ proc gui::upgradeinit {} {
     if {[tk busy current .fw] ne ""} {
 	tk busy forget .fw
     }
-    fwstatus "Please select a firmware file"
-    catch {readhex $cfg(firmware,hexfile)}
+    if {$cfg(firmware,hexfile) ne ""} {
+	catch {readhex $cfg(firmware,hexfile)}
+    } else {
+	fwstatus "Please select a firmware file"
+    }
 }
 
 proc gui::showsettings {} {
@@ -1965,6 +1973,10 @@ proc gui::hexfile {} {
       -title "Choose firmware file"]
     if {$name ne ""} {
         set cfg(firmware,hexfile) $name
+	if {[winfo exists .fw.fn3]} {
+	    .fw.fn3 icursor end
+	    .fw.fn3 xview end
+	}
         readhex $cfg(firmware,hexfile)
     }
 }
@@ -1983,6 +1995,8 @@ proc gui::readhex {file} {
 	if {$devtype ne "none"} {
 	    .fw.f4.b1 state !disabled
 	    fwstatus "Click 'Program' to download the firmware"
+	} else {
+	    fwstatus "Not connected"
 	}
 	if {$arg} {
 	    .fw.cb1 state !disabled
