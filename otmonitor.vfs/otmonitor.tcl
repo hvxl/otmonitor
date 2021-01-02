@@ -312,6 +312,7 @@ proc configsave {} {
     # Don't save settings when reading messages from file
     if {$devtype eq "file"} return
 
+    gui savedialogs
     foreach n [array names cfg] {
         lassign [split $n ,] group name
         if {$name in {password}} {
@@ -1803,6 +1804,13 @@ array set cfg {
     tspeak,field7	""
     tspeak,field8	""
     firmware,hexfile	""
+    fsdialog,sort	name
+    fsdialog,reverse	0
+    fsdialog,duopane	0
+    fsdialog,mixed	0
+    fsdialog,hidden	0
+    fsdialog,details	1
+    fsdialog,historylist	{}
 }
 set cfg(datalog,itemlist) {
     flame

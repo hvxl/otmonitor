@@ -11,6 +11,8 @@ try {
     exit 1
 }
 
+package require matchbox
+
 # Stop the annoying auto-selection of comboboxes
 bind TCombobox <<ComboboxSelected>> {%W selection clear}
 
@@ -30,12 +32,44 @@ namespace eval gui {
     namespace ensemble create -unknown ::gui::passthrough \
       -subcommands {output tvtrace connected scroll}
     
-
     # Create a namespace for images
     namespace eval img {}
 }
 
-proc gui::passthrough {cmd subcmd args} {return [list $subcmd]}
+proc gui::savedialogs {} {}
+
+proc gui::loaddialogs {} {
+    global cfg
+    # Only do this once per run
+    proc loaddialogs args {}
+
+    if {[tk windowingsystem] ne "x11" || [catch {package require fsdialog}]} {
+	return
+    }
+    set prefs {}
+    set hist {}
+    foreach n [array names cfg fsdialog,*] {
+	set opt [lindex [split $n ,] 1]
+	if {$opt eq "historylist"} {
+	    set hist $cfg($n)
+	} elseif {$opt in {details duopane hidden mixed reverse sort}} {
+	    lappend prefs $opt $cfg($n)
+	}
+    }
+    ttk::fsdialog configfile ""
+    ttk::fsdialog history {*}$hist
+    ttk::fsdialog preferences {*}$prefs
+
+    proc savedialogs {} {
+	global cfg
+	set cfg(fsdialog,historylist) [ttk::fsdialog history]
+	dict for {opt val} [ttk::fsdialog preferences] {
+	    set cfg(fsdialog,$opt) $val
+	}
+    }
+}
+
+proc gui::passthrough {cmd subcmd args} {return [namespace which $subcmd]}
 
 proc gui::img {fn {disabled 0}} {
     global imgdir
@@ -538,6 +572,7 @@ proc gui::tvselect {} {
 }
 
 proc gui::selfile {str} {
+    loaddialogs
     set types {
 	{"Text Files"		.txt}
 	{"All Files"		*}
@@ -565,6 +600,7 @@ proc gui::datalayout {} {
 
 proc gui::cfgselectdir {} {
     global cfg
+    loaddialogs
     set dir [tk_chooseDirectory -initialdir $cfg(logfile,directory) \
       -parent .cfg -title "Select the directory for log files"]
     if {$dir ne ""} {
@@ -1032,7 +1068,7 @@ proc gui::cfggeneral {w} {
     pack $w.f1 -fill x -side top
 
     ttk::labelframe $w.f2 -text "Free format command"
-    ttk::entry $w.f2.e -textvariable command
+    ttk::entrybox $w.f2.e -textvariable command
     ttk::button $w.f2.b -text Send -width 5 \
       -command [namespace code {command $command}]
     bind $w.f2.e <Return> [list $w.f2.b invoke]
@@ -1065,11 +1101,11 @@ proc gui::cfgconnection {w} {
       -value tcp -command [namespace code [list cfgconnectedit $w.f2 $w.f1]]
     ttk::labelframe $w.f2 -labelwidget $w.r2
     ttk::label $w.f2.l1 -text "Remote host:"
-    ttk::entry $w.f2.e1 -textvariable cfg(connection,host) -validate key \
-      -validatecommand [namespace code cfgconnectedit]
+    ttk::entrybox $w.f2.e1 -textvariable cfg(connection,host) \
+      -validate key -validatecommand [namespace code cfgconnectedit]
     ttk::label $w.f2.l2 -text "Remote port:"
-    ttk::entry $w.f2.e2 -textvariable cfg(connection,port) -validate key \
-      -validatecommand [namespace code cfgconnectedit]
+    ttk::entrybox $w.f2.e2 -textvariable cfg(connection,port) -width 10 \
+      -validate key -validatecommand [namespace code cfgconnectedit]
     grid $w.f2.l1 $w.f2.e1 -sticky ew -padx 6
     grid $w.f2.l2 $w.f2.e2 -sticky w -padx 6 -pady 6
     grid columnconfigure $w.f2 $w.f2.e1 -weight 1
@@ -1296,15 +1332,15 @@ proc gui::cfgalerts {w} {
       -variable cfg(email,enable) -onvalue true -offvalue false
     ttk::labelframe $f.f1 -style Tab.TLabelframe -labelwidget $f.c1
     ttk::label $f.f1.l1 -style Tab.TLabel -text Sender:
-    ttk::entry $f.f1.e1 -style Tab.TEntry -textvariable cfg(email,sender)
+    ttk::entrybox $f.f1.e1 -style Tab.TEntry -textvariable cfg(email,sender)
     ttk::label $f.f1.l2 -style Tab.TLabel -text Server:
-    ttk::entry $f.f1.e2 -style Tab.TEntry -textvariable cfg(email,server)
+    ttk::entrybox $f.f1.e2 -style Tab.TEntry -textvariable cfg(email,server)
     ttk::label $f.f1.l3 -style Tab.TLabel -text Port:
-    ttk::entry $f.f1.e3 -style Tab.TEntry -textvariable cfg(email,port) -width 8
+    ttk::entrybox $f.f1.e3 -style Tab.TEntry -textvariable cfg(email,port) -width 8
     ttk::label $f.f1.l4 -style Tab.TLabel -text User:
-    ttk::entry $f.f1.e4 -style Tab.TEntry -textvariable cfg(email,user)
+    ttk::entrybox $f.f1.e4 -style Tab.TEntry -textvariable cfg(email,user)
     ttk::label $f.f1.l5 -style Tab.TLabel -text Password:
-    ttk::entry $f.f1.e5 -style Tab.TEntry -textvariable cfg(email,password) -show *
+    ttk::entrybox $f.f1.e5 -style Tab.TEntry -textvariable cfg(email,password) -show *
     ttk::label $f.f1.l6 -style Tab.TLabel -text Encryption:
     ttk::combobox $f.f1.e6 -textvariable cfg(email,secure) \
       -values {Plain TLS SSL} -width 5 -state readonly
@@ -1343,16 +1379,16 @@ proc gui::cfgalerts {w} {
       -variable cfg(sms,enable) -onvalue true -offvalue false
     ttk::labelframe $f.f1 -style Tab.TLabelframe -labelwidget $f.c1
     ttk::label $f.f1.l1 -style Tab.TLabel -text "Destination:"
-    ttk::entry $f.f1.e1 -style Tab.TEntry -textvariable cfg(sms,phonenumber)
+    ttk::entrybox $f.f1.e1 -style Tab.TEntry -textvariable cfg(sms,phonenumber)
     ttk::label $f.f1.l2 -style Tab.TLabel -text Provider:
     ttk::combobox $f.f1.e2 -textvariable cfg(sms,provider) -width 12 \
       -values [lsort [dict keys [alert providers]]] -state readonly
     ttk::label $f.f1.l3 -style Tab.TLabel -text "Account:"
-    ttk::entry $f.f1.e3 -style Tab.TEntry -textvariable cfg(sms,account)
+    ttk::entrybox $f.f1.e3 -style Tab.TEntry -textvariable cfg(sms,account)
     ttk::label $f.f1.l4 -style Tab.TLabel -text "Password:"
-    ttk::entry $f.f1.e4 -style Tab.TEntry -textvariable cfg(sms,password) -show *
+    ttk::entrybox $f.f1.e4 -style Tab.TEntry -textvariable cfg(sms,password) -show *
     ttk::label $f.f1.l5 -style Tab.TLabel -text "Sender:"
-    ttk::entry $f.f1.e5 -style Tab.TEntry -textvariable cfg(sms,sender)
+    ttk::entrybox $f.f1.e5 -style Tab.TEntry -textvariable cfg(sms,sender)
     ttk::label $f.f1.l6 -style Tab.TLabel -text Route:
     ttk::combobox $f.f1.e6 -textvariable routeid -width 16 -state readonly
 
@@ -1445,9 +1481,9 @@ proc gui::cfgwibble {w} {
 
     ttk::labelframe $w.f1 -text "Settings"
     ttk::label $w.f1.l1 -text "Server port:"
-    ttk::entry $w.f1.e1 -textvariable cfg(web,port) -width 8
+    ttk::entrybox $w.f1.e1 -textvariable cfg(web,port) -width 10
     ttk::label $w.f1.l3 -text "Secure port:"
-    ttk::entry $w.f1.e3 -textvariable cfg(web,sslport) -width 8
+    ttk::entrybox $w.f1.e3 -textvariable cfg(web,sslport) -width 10
     ttk::label $w.f1.l2 -text "Web theme:"
     ttk::combobox $w.f1.e2 -state readonly -values $values -width 16
     ttk::checkbutton $w.f1.c4 -text "Passwordless access on standard port" \
@@ -1525,7 +1561,7 @@ proc gui::cfgremote {w} {
       -command [namespace code relaytoggle]
     ttk::labelframe $w.f1 -labelwidget $w.c1
     ttk::label $w.f1.l1 -text "Server port:"
-    ttk::entry $w.f1.e1 -textvariable cfg(server,port) -width 8
+    ttk::entrybox $w.f1.e1 -textvariable cfg(server,port) -width 10
     ttk::checkbutton $w.f1.c2 -variable cfg(server,relay) \
       -text "Relay opentherm messages" -onvalue true -offvalue false
     grid $w.f1.l1 $w.f1.e1 -sticky w -padx 6 -pady 3
@@ -1602,11 +1638,11 @@ proc gui::cfglogging {w} {
       -variable cfg(logfile,enable) -onvalue true -offvalue false
     ttk::labelframe $w.f1 -labelwidget $w.c2
     ttk::label $w.f1.l1 -text "Directory:"
-    ttk::entry $w.f1.e1 -textvariable cfg(logfile,directory)
+    ttk::entrybox $w.f1.e1 -textvariable cfg(logfile,directory)
     ttk::button $w.f1.b1 -text "..." -width 0 \
       -command [namespace code cfgselectdir]
     ttk::label $w.f1.l2 -text "Name pattern:"
-    ttk::entry $w.f1.e2 -textvariable cfg(logfile,pattern)
+    ttk::entrybox $w.f1.e2 -textvariable cfg(logfile,pattern)
     grid $w.f1.l1 $w.f1.e1 $w.f1.b1 -sticky we -padx 6 -pady 3
     grid $w.f1.l2 $w.f1.e2 -sticky we -padx 6 -pady 3
     grid columnconfigure $w.f1 $w.f1.e1 -weight 1
@@ -1618,7 +1654,7 @@ proc gui::cfglogging {w} {
       -command [namespace code cfgdatalog]
     ttk::labelframe $w.f2 -labelwidget $w.c3
     ttk::label $w.f2.l1 -text "File name:"
-    ttk::entry $w.f2.e1 -textvariable cfg(datalog,file)
+    ttk::entrybox $w.f2.e1 -textvariable cfg(datalog,file)
     ttk::button $w.f2.b1 -text "..." -width 0 \
       -command [namespace code datafile]
     ttk::label $w.f2.l2 -text "Interval:"
@@ -1669,19 +1705,19 @@ proc gui::cfgmqtt {w} {
       -variable cfg(mqtt,enable) -onvalue true -offvalue false
     ttk::labelframe $w.f1 -labelwidget $w.c1
     ttk::label $w.f1.l1 -text "Broker Address:"
-    ttk::entry $w.f1.e1 -textvariable cfg(mqtt,broker)
+    ttk::entrybox $w.f1.e1 -textvariable cfg(mqtt,broker)
     ttk::label $w.f1.l2 -text "Broker Port:"
-    ttk::entry $w.f1.e2 -textvariable cfg(mqtt,port) -width 8
+    ttk::entrybox $w.f1.e2 -textvariable cfg(mqtt,port) -width 8
     ttk::label $w.f1.l3 -text "Client Identifier:"
-    ttk::entry $w.f1.e3 -textvariable cfg(mqtt,client)
+    ttk::entrybox $w.f1.e3 -textvariable cfg(mqtt,client)
     ttk::label $w.f1.l4 -text "User Name:"
-    ttk::entry $w.f1.e4 -textvariable cfg(mqtt,username)
+    ttk::entrybox $w.f1.e4 -textvariable cfg(mqtt,username)
     ttk::label $w.f1.l5 -text "Password:"
-    ttk::entry $w.f1.e5 -textvariable cfg(mqtt,password) -show *
+    ttk::entrybox $w.f1.e5 -textvariable cfg(mqtt,password) -show *
     ttk::label $w.f1.l6 -text "Event topic prefix:"
-    ttk::entry $w.f1.e6 -textvariable cfg(mqtt,eventtopic)
+    ttk::entrybox $w.f1.e6 -textvariable cfg(mqtt,eventtopic)
     ttk::label $w.f1.l7 -text "Action topic prefix:"
-    ttk::entry $w.f1.e7 -textvariable cfg(mqtt,actiontopic)
+    ttk::entrybox $w.f1.e7 -textvariable cfg(mqtt,actiontopic)
     ttk::label $w.f1.l11 -text "Data Format:"
     set valdict {
 	json1 "Simple JSON"
@@ -1736,7 +1772,7 @@ proc gui::cfgtspeak {w} {
       -variable cfg(tspeak,enable) -onvalue true -offvalue false
     ttk::labelframe $w.f1 -labelwidget $w.c1
     ttk::label $w.f1.l0 -text "Write key:"
-    ttk::entry $w.f1.e0 -textvariable cfg(tspeak,key) -width 20
+    ttk::entrybox $w.f1.e0 -textvariable cfg(tspeak,key) -width 24
     grid $w.f1.l0 $w.f1.e0 - -sticky w -padx 6 -pady 3
     ttk::label $w.f1.l20 -text "Interval:"
     ttk::spinbox $w.f1.e20 -textvariable cfg(tspeak,interval) \
@@ -1855,7 +1891,7 @@ proc gui::upgradedlg {} {
     wm transient .fw .
     place [ttk::frame .fw.bg] -relheight 1 -relwidth 1
     ttk::label .fw.l3a -text "Firmware file:"
-    ttk::entry .fw.fn3 -textvariable cfg(firmware,hexfile)
+    ttk::entrybox .fw.fn3 -textvariable cfg(firmware,hexfile)
     ttk::button .fw.b3 -text ... -width 0 -command [namespace code hexfile]
     ttk::label .fw.l1a -text "Code memory:"
     ttk::progressbar .fw.pb1 -length 400 -maximum 4096 -variable csize
@@ -1917,6 +1953,7 @@ proc gui::showsettings {} {
 
 proc gui::hexfile {} {
     global cfg
+    loaddialogs
     set dir [file dirname [append cfg(firmware,hexfile) ""]]
     set name [file tail $cfg(firmware,hexfile)]
     set types {
