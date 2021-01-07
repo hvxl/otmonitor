@@ -54,7 +54,7 @@ data bytes</label>
 <input type="text" id="vrefstr" size="5" value="$vreffmt" disabled>
 </td>
 <td width="5%" class="fill">
-<button onclick="setpoint('vref', 'VR')">Set</button>
+<button onclick="setpoint('voltref', 'VR')">Set</button>
 </td>
 </tr>
 </table>
@@ -98,7 +98,7 @@ data bytes</label>
 <input type="number" id="setbackstr" onchange="sync(this, 'setback')" min="5" max="30" step="0.1" value="[get setback 16]" list="tickmarks">
 </td>
 <td width="5%" class="fill">
-<button onclick="setpoint('setpt1', 'SB')">Set</button>
+<button onclick="setpoint('setbackstr', 'SB')">Set</button>
 </td>
 </tr>
 </table>
