@@ -3,7 +3,7 @@
 # Opentherm monitor utility.
 # For more information, see http://otgw.tclcode.com/otmonitor.html
 
-set version 4.5
+set version 5.0
 set reportflags 0
 set appendlog 0
 set setpt 20.00
