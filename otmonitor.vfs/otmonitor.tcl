@@ -638,7 +638,7 @@ proc untab {str args} {
 }
 
 proc otdecode {var type id} {
-    global types message
+    global types message cfg
     upvar 1 $var data
     set str [lindex $types $type]
     if {[info exists message($id)]} {
@@ -663,6 +663,9 @@ proc otdecode {var type id} {
     } else {
 	set msg "Message ID $id"
 	set val $data
+    }
+    if {$cfg(view,messageid)} {
+	append msg " (MsgID=$id)"
     }
     return [list $str $msg $val]
 }
@@ -1735,6 +1738,7 @@ array set cfg {
     view,sort		name
     view,order		increasing
     view,bitflags	false
+    view,messageid	false
     datalog,file	otdata.txt
     datalog,enable	false
     datalog,append	false

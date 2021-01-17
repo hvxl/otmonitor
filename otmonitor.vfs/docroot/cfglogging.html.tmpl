@@ -1,3 +1,4 @@
+% # -*- html -*-
 % global cfg xlate
 <html>
 <head>
@@ -10,7 +11,9 @@ var query = {"var": "cfg"};
 <body onload="fieldsetradio('connection')">
 <h1>Logging</h1>
 <input type="checkbox" id="view,bitflags" [checked cfg(view,bitflags)] onchange="flag(this, 'view', 'bitflags')">
-<label for="view,bitflags">Include details of bit fields</label>
+<label for="view,bitflags">Include details of bit fields</label><br>
+<input type="checkbox" id="view,messageid" [checked cfg(view,messageid)] onchange="flag(this, 'view', 'messageid')">
+<label for="view,messageid">Include message ID</label>
 <fieldset>
 <legend>
 <input type="checkbox" id="logfile,enable" [checked cfg(logfile,enable)] onchange="flag(this, 'logfile', 'enable')">
