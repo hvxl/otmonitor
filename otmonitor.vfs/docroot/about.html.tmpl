@@ -1,19 +1,28 @@
 %# -*- html -*-
-% global theme
+% global theme version fwvariant fwversion
 <html>
 <head>
-<title>Attributions</title>
+<title>About OTMonitor</title>
 <link rel="stylesheet" type="text/css" href="$theme.css">
 </head>
 <body>
 <div id="section">
-<h1>Attributions</h1>
+<h1>About OTMonitor</h1>
 <div>
 <h2>Software</h2>
 
+<h3>OTMonitor version $version</h3>
 This application was created using the Tcl scripting language and a number
 of extensions, all of which were released under a
 <a href="http://www.tcl.tk/software/tcltk/license.html">BSD-style license</a>.
+
+<h2>Firmware</h2>
+The OTGW is currently running
+% if {$fwvariant eq ""} {
+unknown firmware.
+% } else {
+the <b>$fwvariant</b> firmware, version $fwversion.
+% }
 
 <h2>Icons</h2>
 

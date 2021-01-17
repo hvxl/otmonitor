@@ -5,7 +5,7 @@
 <a href="summary.html">Summary</a>|
 <a href="configure.html" target="otmoncfg">Configure</a>|
 <a href="upgrade.html">Upgrade</a>|
-<a href="attributions.html">Attributions</a>|
+<a href="about.html">About</a>|
 <a href="resources.html">Resources</a>|
 <a href="http://otgw.tclcode.com/">Web site</a>
 </footer>
