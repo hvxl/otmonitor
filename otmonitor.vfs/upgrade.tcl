@@ -18,8 +18,8 @@ proc upgrade::readhex {file} {
 }
 
 proc upgrade::parsehex {hexdata} {
-    global mem csize dsize cocmd copct devtype gwversion restore
-    variable fwversion 0
+    global mem csize dsize cocmd copct devtype fwversion fwvariant restore
+    variable upversion 0
     set csize 0
     set dsize 0
     set cocmd 0
@@ -86,9 +86,13 @@ proc upgrade::parsehex {hexdata} {
 	set list [split [binary format c* $data] \0]
 	set rec [lsearch -inline $list {*OpenTherm Gateway*}]
 	set rec [string trimleft $rec A=]
-	scan $rec {OpenTherm Gateway %s} fwversion
-	variable eeold [eeprom $gwversion]
-	variable eenew [eeprom $fwversion]
+	scan $rec {OpenTherm Gateway %s} upversion
+	if {$fwvariant eq "gateway"} {
+	    variable eeold [eeprom $fwversion]
+	} else {
+	    variable eeold [eeprom 0]
+	}
+	variable eenew [eeprom $upversion]
 	if {[dict size $eenew] > 0 && [dict size $eeold] > 0} {
 	    set restore [expr {abs($restore)}]
 	    return [list success 1]
@@ -228,10 +232,33 @@ proc upgrade::sendbreak {} {
     }
 }
 
+proc upgrade::resetcommand {} {
+    global dev fwvariant fwversion
+    switch $fwvariant {
+	gateway {
+	    # The GW=R command was added to the gateway firmware version 4.0a6
+	    if {![package vsatisfies $fwversion 4.0a6-]} {return 0}
+	}
+	interface {
+	    # The GW=R command was added to the interface firmware version 1.1
+	    if {![package vsatisfies $fwversion 1.1-]} {return 0}
+	}
+	default {
+	    # Other firmware doesn't support the GW=R command
+	    return 0
+	}
+    }
+    # Make sure to terminate with only a \r. Sending \r\n would cut short the
+    # delay at the start of the self programming code, possibly mutilating
+    # the ETX char.
+    puts -nonewline $dev GW=R\r
+    return 1
+}
+
 proc upgrade::loadhex {cmd} {
-    global mem dev devtype cocmd cocnt copct restore gwversion
+    global mem dev devtype cocmd cocnt copct restore fwvariant fwversion
     variable retries
-    variable fwversion
+    variable upversion
     variable eeold
     variable eenew
     set ans ""
@@ -268,13 +295,8 @@ proc upgrade::loadhex {cmd} {
 	set copct 0%
 	$cmd status "Switching gateway to self-programming mode"
 	if {![sendbreak] || ![cowaitch 4 1000]} {
-	    if {[package vsatisfies $gwversion 4.0a6-]} {
-		# Send a reset serial command. Make sure to terminate with only
-		# a \r. Sending \r\n would cut short the delay at the start of
-		# the self programming code, possibly mutilating the ETX char.
-		puts -nonewline $dev GW=R\r
-		cowaitch 4 2000
-	    }
+	    # Send a reset serial command, if the firmware supports it.
+	    if {[resetcommand]} {cowaitch 4 2000}
 	}
 	# Check if the gateway is in self-programming mode
 	set rc [cocmd 0 3 {} 100 1]
@@ -409,7 +431,12 @@ proc upgrade::loadhex {cmd} {
 	    # Start the program
 	    cocmd 8 0 {} 0
 	    $cmd status "Firmware download succeeded - $retries retries"
-	    set gwversion $fwversion
+	    set fwversion $upversion
+	    if {$fwversion > 0} {
+		set fwvariant gateway
+	    } else {
+		set fwvariant ""
+	    }
 	}
 	return success
     } on error err {

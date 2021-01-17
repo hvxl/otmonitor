@@ -768,8 +768,8 @@ proc gui::information {w x y} {
 }
 
 proc gui::setsetpoint {{cmd TC}} {
-    global setpt gwversion value start
-    if {![package vsatisfies $gwversion 4.0a6-]} {
+    global setpt fwversion value start
+    if {![package vsatisfies $fwversion 4.0a6-]} {
 	if {[info exists value(1,2)] && [info exists value(1,126)]} {
 	    lassign $value(1,2) bits id
 	    lassign $value(1,126) type version
@@ -1192,7 +1192,7 @@ proc gui::cfgselect {w cmd var} {
 }
 
 proc gui::cfgtweak {w} {
-    global voltref gwversion
+    global voltref fwversion
     ttk::checkbutton $w.b1 -text "Ignore multiple mid-bit transitions" \
       -variable midbit -command [namespace code {sercmd IT=$midbit}]
     pack $w.b1 -fill x -side top
@@ -1202,7 +1202,7 @@ proc gui::cfgtweak {w} {
       -variable overridehb -command [namespace code {sercmd OH=$overridehb}]
     pack $w.b2 -fill x -side top
 
-    if {![package vsatisfies $gwversion 4.0b0-]} {
+    if {![package vsatisfies $fwversion 4.0b0-]} {
 	$w.b2 state disabled
     }
 
@@ -1937,11 +1937,11 @@ proc gui::upgradedlg {} {
 }
 
 proc gui::upgradeinit {} {
-    global cfg gwversion
+    global cfg fwversion
     fwstatus "Determining current firmware ..."
     # Attempt to determine the firmware version, if it is not yet known"
     tk busy hold .fw
-    while {$gwversion eq "0" && [incr try] <= 3} {
+    while {$fwversion eq "0" && [incr try] <= 3} {
 	set result [sercmd PR=A "" 500]
     }
     if {[tk busy current .fw] ne ""} {

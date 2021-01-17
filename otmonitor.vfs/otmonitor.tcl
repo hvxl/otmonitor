@@ -12,7 +12,8 @@ set voltref 3
 set dhwsetpoint 60.00
 set chsetpoint 75.00
 set devtype none
-set gwversion 0
+set fwvariant ""
+set fwversion 0
 set gwmode Unknown
 set midbit 1
 set docpath {}
@@ -366,7 +367,7 @@ proc response {str} {
 }
 
 proc process {line} {
-    global gwversion cfg clients
+    global fwvariant fwversion cfg clients
     if {$cfg(server,relay)} {
 	dict for {client fd} $clients {
 	    if {[catch {puts $fd $line}]} {
@@ -377,13 +378,13 @@ proc process {line} {
     }
     if {[scan $line {%1[ABRT]%1x%1x%2x%4x} src type res id data] == 5} {
 	otmessage [clock microseconds] $line [expr {$type & 7}] $id $data
-	if {$gwversion eq "0" && $src eq "B"} {
+	if {$fwversion eq "0" && $src eq "B"} {
 	    global count
 	    # Stop after a few attempts, in case the report format changes
 	    if {[array size count] <= 10} {
 		sercmd PR=A
 	    } else {
-		set gwversion 4.0a9
+		set fwversion 4.0a9
 	    }
 	}
     } elseif {[scan $line {Error %2x} errno] == 1} {
@@ -392,8 +393,20 @@ proc process {line} {
 	incr error($errno)
 	signal error $errno
     } elseif {[scan $line {Opentherm gateway diagnostics - Version %s} ver] == 1} {
+	set fwvariant diagnose
+	set fwversion $ver
 	gui diagnostics $ver
 	output "[ts]\t$line"
+    } elseif {[set x [string first "OpenTherm Interface " $line]] >= 0} {
+	if {[scan [string range $line $x end] {%*s %*s %s} ver] == 1} {
+	    # Make sure a valid version number was found
+	    if {![catch {package vcompare $ver $ver}]} {
+		set fwvariant interface
+		set fwversion $ver
+	    }
+	}
+	output "[ts]\t$line"
+	response $line
     } elseif {[set x [string first "OpenTherm Gateway " $line]] >= 0} {
 	if {$x == 0 || [string index $line [expr {$x - 1}]] ne "="} {
 	    set reset 1
@@ -410,14 +423,15 @@ proc process {line} {
 	    if {![catch {package vcompare $gwver $gwver}]} {
 		# Send the time when the gateway version was not yet known,
 		# or after a reset of the gateway
-		if {$gwversion eq "0" || $reset} {
+		if {$fwversion eq "0" || $reset} {
 		    global cfg
 		    if {$cfg(clock,auto)} {sync 1}
 		}
-		set gwversion $gwver
+		set fwvariant gateway
+		set fwversion $gwver
 	    }
 	}
-	if {$reset && ![package vsatisfies $gwversion 4.2.8-]} {
+	if {$reset && ![package vsatisfies $fwversion 4.2.8-]} {
 	    # Before firmware 4.2.8, the OTGW is in gateway mode after a reset
 	    gwmode 1
 	}
@@ -2144,12 +2158,12 @@ register 100	{nu flag8}	"Remote override function"
 if {$firmware ne ""} {
     include upgrade.tcl
     puts -nonewline stderr "Current firmware version: "
-    set id [after 5000 {set gwversion 0}]
-    vwait gwversion
-    if {$gwversion == 0} {
+    set id [after 5000 {set fwversion 0}]
+    vwait fwversion
+    if {$fwversion == 0} {
 	puts stderr unknown
     } else {
-	puts stderr $gwversion
+	puts stderr $fwversion
     }
     lassign [upgrade readhex $firmware] result arg
     if {$result eq "success"} {

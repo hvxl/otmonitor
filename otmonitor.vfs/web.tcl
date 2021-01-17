@@ -481,7 +481,7 @@ namespace eval json {
     }
 
     proc dump {} {
-	global dump gui version gwversion
+	global dump gui version fwversion
 	variable description
 	set tab "    "
 	set str \n
@@ -490,7 +490,7 @@ namespace eval json {
 
 	set ver \n
 	append ver $tab [format {  "name": "%s",} "Opentherm Gateway"] \n
-	append ver $tab [format {  "version": "%s"} $gwversion] \n
+	append ver $tab [format {  "version": "%s"} $fwversion] \n
 	append str $tab [format {"firmware": {%s},} $ver$tab] \n
 
 	set ver \n
