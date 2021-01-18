@@ -238,10 +238,17 @@ proc upgrade::resetcommand {} {
 	gateway {
 	    # The GW=R command was added to the gateway firmware version 4.0a6
 	    if {![package vsatisfies $fwversion 4.0a6-]} {return 0}
+	    set resetcmd GW=R
 	}
 	interface {
 	    # The GW=R command was added to the interface firmware version 1.1
 	    if {![package vsatisfies $fwversion 1.1-]} {return 0}
+	    set resetcmd GW=R
+	}
+	diagnose {
+	    # The reset command was added to the diagnose firmware version 1.2
+	    if {![package vsatisfies $fwversion 1.2-]} {return 0}
+	    set resetcmd 0
 	}
 	default {
 	    # Other firmware doesn't support the GW=R command
@@ -251,7 +258,7 @@ proc upgrade::resetcommand {} {
     # Make sure to terminate with only a \r. Sending \r\n would cut short the
     # delay at the start of the self programming code, possibly mutilating
     # the ETX char.
-    puts -nonewline $dev GW=R\r
+    puts -nonewline $dev $resetcmd\r
     return 1
 }
 
