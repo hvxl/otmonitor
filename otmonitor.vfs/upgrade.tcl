@@ -248,7 +248,7 @@ proc upgrade::resetcommand {} {
 	diagnose {
 	    # The reset command was added to the diagnose firmware version 1.2
 	    if {![package vsatisfies $fwversion 1.2-]} {return 0}
-	    set resetcmd 0
+	    set resetcmd \r0
 	}
 	default {
 	    # Other firmware doesn't support the GW=R command
