@@ -4,7 +4,7 @@ function debug(str) {
   if (output) output.innerHTML += str + "<BR>"
 }
 
-var wsurl = "ws" + document.URL.match("s?://[-a-z0-9.:]+/") + "upgrade.ws"
+var wsurl = "ws" + document.URL.match("s?://[-a-zA-Z0-9.:_/]+/") + "upgrade.ws"
 
 if ("WebSocket" in window) {
    debug("Using WebSocket")
