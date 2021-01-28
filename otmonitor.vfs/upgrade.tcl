@@ -554,8 +554,8 @@ proc upgrade::eeprom {version} {
 	dict set rc FunctionLED size 4
     }
 
-    # In firmware 4.0a7 and 4.0a8 there was no L= in front of the LED settings
-    if {[package vsatisfies $version 4.0a7-4.0a9]} {
+    # In firmware 4.0a6 - 4.0a8 there was no L= in front of the LED settings
+    if {[package vsatisfies $version 4.0a6-4.0a9]} {
 	dict set rc FunctionLED address 0x04
     }
 
@@ -587,9 +587,9 @@ proc upgrade::eeprom {version} {
 	dict set rc ThermResponse {address 0xd8 size 8}
     }
 
-    # Before 4.0b0 only 6 bits of the settings byte were used
+    # Before 4.0b0 only 5 bits of the settings byte were used
     if {![package vsatisfies $version 4.0b0-]} {
-	dict set rc SavedSettings mask 0x3F
+	dict set rc SavedSettings mask 0x1F
     }
 
     # Thermostat model setting was introduced in 4.1
