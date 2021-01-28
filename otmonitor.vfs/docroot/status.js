@@ -18,7 +18,7 @@ function formatquery(url, json) {
     return url + '?' + query.join('&');
 }
 
-var wsurl = "ws" + document.URL.match("s?://[-a-z0-9.:]+/") + "status.ws"
+var wsurl = "ws" + document.URL.match("s?://[-a-zA-Z0-9.:_/]+/") + "status.ws"
 if (typeof query !== 'undefined') {
     wsurl = formatquery(wsurl, query);
 }
@@ -181,7 +181,7 @@ function input(w, section, name) {
 
 function seconds(w, section, name) {
     config(section, name, w.value * 1000);
-} 
+}
 
 function sync(w, id) {
     var e = document.getElementById(id);
