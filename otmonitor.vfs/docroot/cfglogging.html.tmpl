@@ -113,7 +113,9 @@ Interval:
 <td class="fill">
 <select id="selected" size="10" onchange="buttonstate(this, 'buttonl', 'buttonu', 'buttond')">
 % foreach n $cfg(datalog,itemlist) {
+%     if {[dict exists $xlate $n]} {
 <option value="$n">[dict get $xlate $n]</option>
+%     }
 % }
 </select>
 </td>
