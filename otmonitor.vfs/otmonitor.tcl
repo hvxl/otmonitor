@@ -92,17 +92,27 @@ set xlate {
     airpresfault	"Air pressure fault"
     boilertemp		"Boiler water temperature"
     boilertemp2		"Boiler water temperature 2"
+    exhausttemp		"Boiler exhaust temperature"
     ch2enable		"Central heating 2 enable"
     ch2mode		"Central heating 2 mode"
     chenable		"Central heating enable"
     chmode		"Central heating mode"
     chwsetpoint		"Central heating setpoint"
+    chbh		"CH burner hours"
+    chbs		"CH burner starts"
+    chph		"CH pump hours"
+    chps		"CH pump starts"
     pressure		"CH water pressure"
     controlsp		"Control setpoint"
     controlsp2		"Control setpoint 2"
     coolingenable	"Cooling enable"
     coolingstatus	"Cooling status"
     diag		"Diagnostic indication"
+    dhwbh		"DHW burner hours"
+    dhwbs		"DHW burner starts"
+    dhwflowrate		"DHW flow rate"
+    dhwph		"DHW pump hours"
+    dhwps		"DHW pump starts"
     dhwenable		"Domestic hot water enable"
     dhwmode		"Domestic hot water mode"
     dhwsetpoint		"Domestic hot water setpoint"
@@ -247,6 +257,8 @@ set signals {
     CHWaterPresure		{bar		float}
     RemoteOverrideRoomSetpoint	{temp		float}
     CHWaterDeltaT		{temp		float}
+    ExhaustTemperature		{temp		float}
+    DHWFlowRate			{rate		float}
     CHBurnerStarts		{count		unsigned}
     CHPumpStarts		{count		unsigned}
     DHWPumpStarts 		{count		unsigned}
@@ -2035,7 +2047,8 @@ special 7 18 unknownid pressure
 special 7 26 unknownid dhwtemp
 special 0 101 mastersolar
 special 4 101 slavesolar
-
+special 4 19 guifloat dhwflowrate dhwflowrate
+special 4 33 guifloat exhausttemp exhausttemperature
 special 4 116 guishort chbs chburnerstarts
 special 4 117 guishort chps chpumpstarts
 special 4 118 guishort dhwps dhwpumpstarts
