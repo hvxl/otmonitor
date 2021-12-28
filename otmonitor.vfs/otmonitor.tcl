@@ -3,7 +3,7 @@
 # Opentherm monitor utility.
 # For more information, see http://otgw.tclcode.com/otmonitor.html
 
-set version 5.1
+set version 5.2
 set reportflags 0
 set appendlog 0
 set setpt 20.00
@@ -451,6 +451,12 @@ proc process {line} {
     } elseif {[string match {*WDT reset!*} $line]} {
 	output "[ts]\t$line"
 	alert watchdogtimer
+    } elseif {[scan $line {CS: %f} ctrlsetpt] == 1} {
+	output "[ts]\t$line"
+	after cancel commandexpired
+	if {$ctrlsetpt != 0.0} {
+	    after 62915 commandexpired
+	}
     } else {
 	# Filter out non-printable characters
 	output "[ts]\t[regsub -all {[\0-\x1f]} $line {}]"
@@ -1538,6 +1544,19 @@ proc sync {{force 0}} {
     }
     if {$cfg(clock,auto)} {
 	after [expr {60000 - [clock milliseconds] % 60000}] sync
+    }
+}
+
+proc commandexpired {} {
+    global cfg
+    if {$cfg(clock,auto)} {
+	# Some party has issued a CS command. But since OTmonitor periodically
+	# updates the clock, that command would never expire if the other
+	# application crashes. For that reason, the command is specifically
+	# cancelled here after a little over a minute.
+	sercmd CS=0
+	# Repeat if not acknowledged
+	after 2000 commandexpired
     }
 }
 

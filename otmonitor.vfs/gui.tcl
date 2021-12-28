@@ -38,14 +38,12 @@ namespace eval gui {
 
 proc gui::savedialogs {} {}
 
-proc gui::loaddialogs {} {
+proc gui::loaddialogs {args} {
     global cfg
     # Only do this once per run
     proc loaddialogs args {}
 
-    if {[tk windowingsystem] ne "x11" || [catch {package require fsdialog}]} {
-	return
-    }
+    if {[catch {package require fsdialog}]} return
     set prefs {}
     set hist {}
     foreach n [array names cfg fsdialog,*] {
@@ -67,6 +65,12 @@ proc gui::loaddialogs {} {
 	    set cfg(fsdialog,$opt) $val
 	}
     }
+}
+
+if {[tk windowingsystem] eq "x11"} {
+    trace add execution tk_getOpenFile enter gui::loaddialogs
+    trace add execution tk_getSaveFile enter gui::loaddialogs
+    trace add execution tk_chooseDirectory enter gui::loaddialogs
 }
 
 proc gui::passthrough {cmd subcmd args} {return [namespace which $subcmd]}
@@ -572,7 +576,6 @@ proc gui::tvselect {} {
 }
 
 proc gui::selfile {str} {
-    loaddialogs
     set types {
 	{"Text Files"		.txt}
 	{"All Files"		*}
@@ -600,7 +603,6 @@ proc gui::datalayout {} {
 
 proc gui::cfgselectdir {} {
     global cfg
-    loaddialogs
     set dir [tk_chooseDirectory -initialdir $cfg(logfile,directory) \
       -parent .cfg -title "Select the directory for log files"]
     if {$dir ne ""} {
@@ -1964,7 +1966,6 @@ proc gui::showsettings {} {
 
 proc gui::hexfile {} {
     global cfg
-    loaddialogs
     set dir [file dirname [append cfg(firmware,hexfile) ""]]
     set name [file tail $cfg(firmware,hexfile)]
     set types {
