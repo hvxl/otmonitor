@@ -989,7 +989,22 @@ proc guishort {name args} {
     global gui
     overridedelay
     lassign [lreverse $args] value signal
-    set short [unsigned8 $value]
+    set short [unsigned $value]
+    if {[catch {expr {$short != $gui($name)}} rc] || $rc} {
+	set gui($name) $short
+	if {$signal ne ""} {
+	    signal $signal $short
+	    set gui($signal) $short
+	}
+    }
+    return 0
+}
+
+proc guisigned {name args} {
+    global gui
+    overridedelay
+    lassign [lreverse $args] value signal
+    set short [signed $value]
     if {[catch {expr {$short != $gui($name)}} rc] || $rc} {
 	set gui($name) $short
 	if {$signal ne ""} {
@@ -2067,7 +2082,7 @@ special 7 26 unknownid dhwtemp
 special 0 101 mastersolar
 special 4 101 slavesolar
 special 4 19 guifloat dhwflowrate dhwflowrate
-special 4 33 guifloat exhausttemp exhausttemperature
+special 4 33 guisigned exhausttemp exhausttemperature
 special 4 116 guishort chbs chburnerstarts
 special 4 117 guishort chps chpumpstarts
 special 4 118 guishort dhwps dhwpumpstarts
