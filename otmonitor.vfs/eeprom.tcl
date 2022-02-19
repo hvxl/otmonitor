@@ -44,8 +44,8 @@ proc gui::eeprom::gui {w} {
 
 proc gui::eeprom::savedsettings {w data} {
     set val [dict get $data value]
-    set ref [expr {($val & 0x1f) - 3}]
-    set volt [expr {($val & 0x1f) * 5. / 24}]
+    set ref [expr {voltref($val)}]
+    set volt [expr {voltage($ref)}]
     $w insert end "Reference voltage:\t[format %d=%.3fV $ref $volt]\n"
     $w insert end "Ignore transitions:\t[expr {($val & 0x20) != 0}]\n"
     $w insert end "Override high byte:\t[expr {($val & 0x40) != 0}]\n"

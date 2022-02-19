@@ -3,7 +3,7 @@
 # Opentherm monitor utility.
 # For more information, see http://otgw.tclcode.com/otmonitor.html
 
-set version 5.3
+set version 6.0
 set reportflags 0
 set appendlog 0
 set setpt 20.00
@@ -270,9 +270,61 @@ set signals {
     GatewayReset		{}
 }
 
+# Voltage math function
+proc tcl::mathfunc::voltage {num} {
+    if {[cpu] in {16f628 16f88}} {
+	return [expr {($num + 3) * 5. / 24}]
+    } else {
+	return [expr {(2 * $num + 13) * 2.048 / 32}]
+    }
+}
+
+proc tcl::mathfunc::voltref {val} {
+    if {[cpu] in {16f628 16f88}} {
+	return [expr {min(max(($val & 0x1f) - 3, 0), 9)}]
+    } else {
+	return [expr {min(max(($val & 0x1f) - 13, 0) / 2, 9)}]
+    }
+}
+
 # Standard NRE helper proc
 proc yieldm {value} {
     yieldto return -level 0 $value
+}
+
+proc cpu {} {
+    global fwvariant fwversion cfg
+    set versions {
+	gateway {
+	    16f628 {1-3}
+	    16f88 {3 4 5}
+	    16f1847 {6}
+	}
+	diagnose {
+	    16f88 {1}
+	    16f1847 {2}
+	}
+	interface {
+	    16f88 {1}
+	    16f1847 {2}
+	}
+    }
+    # Check if the configured pic is correct
+    if {[dict exists $versions $fwvariant $cfg(otgw,pic)]} {
+	set match [dict get $versions $fwvariant $cfg(otgw,pic)]
+	if {[package vsatisfies $fwversion {*}$match]} {
+	    return $cfg(otgw,pic)
+	}
+    }
+    if {[dict exists $versions $fwvariant]} {
+	dict for {dev req} [dict get $versions $fwvariant] {
+	    if {[package vsatisfies $fwversion {*}$req]} {
+		set cfg(otgw,pic) $dev
+		return $dev
+	    }
+	}
+    }
+    return
 }
 
 proc flag {val} {
@@ -333,7 +385,12 @@ proc opmode {val} {
 
 proc debug {str} {
     global verbose
-    if {$verbose} {puts $str}
+    if {$verbose} {
+	set now [clock milliseconds]
+	set ts [clock format [expr {$now / 1000}] -format %T]
+	append ts . [format %03d [expr {$now % 1000}]]
+	puts "$ts $str"
+    }
 }
 
 proc configsave {} {
@@ -615,7 +672,7 @@ proc voltage {name val} {
     global voltage
     upvar #0 $name var
     set var [expr {round($val)}]
-    set voltage [format %.3f [expr {($var + 3) * 5. / 24}]]
+    set voltage [format %.3f [expr {voltage($var)}]]
 }
 
 proc ts {{ts ""}} {
@@ -633,6 +690,45 @@ proc setstatus {var str {delay 0}} {
     after cancel $cmd
     if {$delay > 0} {after $delay $cmd}
     set status $str
+}
+
+proc loadpic {name} {
+    global pic
+    # datasize: Data EEPROM size
+    # codesize: Program words
+    # confsize: Size of config area
+    # cfgbase: Base address of the configuration area
+    # eebase: Base address of the data EEPROM
+    # erasesize: Number of program words affected by a single row erase
+    # groupsize: Number of write latches
+    # blockwrite: Whether all words in a group must be written
+    # magic: Expected instruction sequence at address 0 (mask, data, ...)
+    # recover: Fallback instructions in case the upgrade fails
+    set pic {
+	datasize 256
+	codesize 4096
+	confsize 9
+	cfgbase 0x2000
+	eebase 0x2100
+	erasesize 32
+	groupsize 4
+	blockwrite true
+	magic {0x3fff 0x158a 0x3e00 0x2600}
+	recover {
+	    addr {
+		set movlp [expr {$addr & 0x800 ? 0x158a : 0x118a}]
+		set call [expr {0x2000 | $addr & 0x7ff}]
+		return [list $movlp $call 0x118a 0x2820]
+	    }
+	}
+    }
+    try {
+	set f [open [file join $starkit::topdir pic$name.inc]]
+	set new [dict merge $pic [read $f]]
+	set pic $new
+    } finally {
+	if {[info exists f]} {catch {close $f}}
+    }
 }
 
 proc gwmode {sw} {
@@ -1957,6 +2053,7 @@ array set cfg {
     fsdialog,hidden	0
     fsdialog,details	1
     fsdialog,historylist	{}
+    otgw,pic		16f88
 }
 set cfg(datalog,itemlist) {
     flame
@@ -1995,6 +2092,8 @@ foreach n [array names cfg] {
 	set cfg($n) [settings get $group $name $cfg($n)]
     }
 }
+
+loadpic $cfg(otgw,pic)
 
 if {[settings get mqtt deviceid] ne ""} {
     set devid [settings get mqtt deviceid]
@@ -2311,7 +2410,7 @@ if {$firmware ne ""} {
     } else {
 	puts stderr $fwversion
     }
-    lassign [upgrade readhex $firmware] result arg
+    lassign [upgrade readfw $firmware] result arg
     if {$result eq "success"} {
 	puts stderr "Target firmware version: $upgrade::fwversion"
 	set restore $arg

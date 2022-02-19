@@ -1889,7 +1889,7 @@ proc gui::connection {} {
 }
 
 proc gui::upgradedlg {} {
-    global eeprom
+    global eeprom pic
     destroy .fw
     toplevel .fw
     wm title .fw "Firmware upgrade"
@@ -1899,10 +1899,12 @@ proc gui::upgradedlg {} {
     ttk::entrybox .fw.fn3 -textvariable cfg(firmware,hexfile)
     ttk::button .fw.b3 -text ... -width 0 -command [namespace code hexfile]
     ttk::label .fw.l1a -text "Code memory:"
-    ttk::progressbar .fw.pb1 -length 400 -maximum 4096 -variable csize
+    ttk::progressbar .fw.pb1 -length 400 -variable csize \
+      -maximum [dict get $pic codesize]
     ttk::label .fw.l1b -width 5 -anchor e
     ttk::label .fw.l2a -text "Data memory:"
-    ttk::progressbar .fw.pb2 -length 400 -maximum 256 -variable dsize
+    ttk::progressbar .fw.pb2 -length 400 -variable dsize \
+      -maximum [dict get $pic datasize]
     ttk::label .fw.l2b -width 5 -anchor e
     ttk::label .fw.l5a -text "Progress:"
     ttk::progressbar .fw.pb5 -length 400 -variable cocmd
@@ -1916,7 +1918,7 @@ proc gui::upgradedlg {} {
     ttk::separator .fw.sep
     ttk::frame .fw.f4
     ttk::button .fw.f4.b1 -text "Program" -width 8 -state disabled \
-      -command [namespace code [list loadhex start]]
+      -command [namespace code [list loadfw start]]
     ttk::button .fw.f4.b2 -text "Done" -width 8 -command {destroy .fw}
     grid .fw.f4.b1 .fw.f4.b2 -padx 20 -pady 4
     grid .fw.l3a .fw.fn3 .fw.b3 -padx 2 -pady 2 -sticky ew
@@ -1936,7 +1938,7 @@ proc gui::upgradedlg {} {
 
     coroutine upgradecoro upgradeinit
     bind .fw.fn3 <Return> \
-      [namespace code {catch {readhex $cfg(firmware,hexfile)}}]
+      [namespace code {catch {readfw $cfg(firmware,hexfile)}}]
     grab .fw
     if {![info exists eeprom]} {grid remove .fw.bb1}
 }
@@ -1953,7 +1955,7 @@ proc gui::upgradeinit {} {
 	tk busy forget .fw
     }
     if {$cfg(firmware,hexfile) ne ""} {
-	catch {readhex $cfg(firmware,hexfile)}
+	catch {readfw $cfg(firmware,hexfile)}
     } else {
 	fwstatus "Please select a firmware file"
     }
@@ -1969,10 +1971,10 @@ proc gui::hexfile {} {
     set dir [file dirname [append cfg(firmware,hexfile) ""]]
     set name [file tail $cfg(firmware,hexfile)]
     set types {
-        {"Firmware files"       .hex}
+        {"Firmware files"       {.cof .cod .hex}}
         {"All files"            *}
     }
-    set name [tk_getOpenFile -filetypes $types -defaultextension .hex \
+    set name [tk_getOpenFile -filetypes $types -defaultextension .cof \
       -initialdir $dir -initialfile $name -parent .fw \
       -title "Choose firmware file"]
     if {$name ne ""} {
@@ -1981,21 +1983,25 @@ proc gui::hexfile {} {
 	    .fw.fn3 icursor end
 	    .fw.fn3 xview end
 	}
-        readhex $cfg(firmware,hexfile)
+        readfw $cfg(firmware,hexfile)
     }
 }
 
-proc gui::readhex {file} {
-    global csize dsize devtype
+proc gui::readfw {file} {
+    global csize dsize devtype pic
     .fw.l1b configure -text ""
     .fw.l2b configure -text ""
     .fw.f4.b1 state disabled
-    lassign [upgrade readhex $file] rc arg
+    lassign [upgrade readfw $file] rc arg
     if {$rc eq "failed"} {
 	fwstatus $arg
     } else {
-	.fw.l1b configure -text [format %d%% [expr {100 * $csize / 4096}]]
-	.fw.l2b configure -text [format %d%% [expr {100 * $dsize / 256}]]
+	.fw.pb1 configure -maximum [dict get $pic codesize]
+	.fw.l1b configure \
+	  -text [format %d%% [expr {100 * $csize / [dict get $pic codesize]}]]
+	.fw.pb2 configure -maximum [dict get $pic datasize]
+	.fw.l2b configure \
+	  -text [format %d%% [expr {100 * $dsize / [dict get $pic datasize]}]]
 	if {$devtype ne "none"} {
 	    .fw.f4.b1 state !disabled
 	    fwstatus "Click 'Program' to download the firmware"
@@ -2010,13 +2016,13 @@ proc gui::readhex {file} {
     }
 }
 
-namespace eval gui::loadhex {
+namespace eval gui::loadfw {
     namespace ensemble create -subcommands {
 	start status check init manual progress go done
     }
 
     proc start {} {
-	coroutine coro upgrade loadhex [namespace current]
+	coroutine coro upgrade loadfw [namespace current]
     }
 
     proc status {msg} {

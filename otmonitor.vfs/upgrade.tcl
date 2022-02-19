@@ -1,107 +1,212 @@
 namespace eval upgrade {
-    namespace ensemble create -subcommands {readhex loadhex parsehex}
+    namespace ensemble create -subcommands {readfw loadfw}
 }
 
-proc upgrade::readhex {file} {
-    # A firmware file is around 32k max
+proc upgrade::readfw {file} {
+    global csize dsize cocmd copct
     if {[catch {open $file} f]} {
 	return [list failed "Error: $f"]
     }
     try {
-	set data [read $f 65536]
+	set data [read $f 11]
+	binary scan $data su magic
+	if {$magic == 0x1240} {
+	    set format cof
+	} elseif {[regexp {^:[[:xdigit:]]{10}} $data]} {
+	    set format hex
+	    # A hex firmware file is around 32k max
+	    append data [read $f 65536]
+	} else {
+	    set format cod
+	}
     } on error err {
 	return [list failed "Error: $err"]
     } finally {
 	close $f
     }
-    tailcall parsehex $data
+    try {
+	set csize 0
+	set dsize 0
+	set cocmd 0
+	set copct ""
+	switch $format {
+	    cof {parsecof $file}
+	    cod {parsecod $file}
+	    default {parsehex $data}
+	}
+	process
+    } on error err {
+	return [list failed "Invalid firmware file: $err"]
+    }
 }
 
 proc upgrade::parsehex {hexdata} {
-    global mem csize dsize cocmd copct devtype fwversion fwvariant restore
-    variable upversion 0
-    set csize 0
-    set dsize 0
-    set cocmd 0
-    set copct ""
-    dict set mem data [lrepeat 256 {}]
-    dict set mem code [lrepeat 4096 {}]
-    dict set mem conf [lrepeat 9 {}]
-    try {
-	foreach line [split $hexdata \n] {
-	    if {[scan $line :%2x%4x%2x%s size addr tag data] != 4} {
-		error "parse error"
-	    }
-	    if {$size & 1} {error "invalid data size"}
-	    if {![string is xdigit -strict $data]} {error "invalid hex data"}
-	    binary scan [binary format H* [string range $line 1 end]] cu* list
-	    if {[checksum $list] != 0} {error "checksum error"}
-	    if {$tag == 0} {
-		if {$addr >= 0x4400} {
-		    # Bogus addresses
-		} elseif {$addr >= 0x4200} {
-		    # Data memory
-		    set addr [expr {($addr - 0x4200) >> 1}]
-		    binary scan [binary format H* $data] su* list
-		    dict update mem data data {
-			foreach n $list {
-			    lset data $addr [format 0x%02x [expr {$n & 0xff}]]
-			    incr addr
-			}
-		    }
-		} elseif {$addr >= 0x4000} {
-		    # Configuration bits
-		    set addr [expr {($addr - 0x4000) >> 1}]
-		    binary scan [binary format H* $data] su* list
-		    dict update mem conf data {
-			foreach n $list {
-			    lset data $addr [format 0x%04x $n]
-			    incr addr
-			}
-		    }
-		} else {
-		    # Program memory
-		    set addr [expr {$addr >> 1}]
-		    binary scan [binary format H* $data] su* list
-		    dict update mem code data {
-			foreach n $list {
-			    lset data $addr [format 0x%04x $n]
-			    incr addr
-			}
+    global mem pic
+    variable cpu [cpu]
+    loadpic $cpu
+    dict with pic {}
+    dict set mem data [lrepeat $datasize {}]
+    dict set mem code [lrepeat $codesize {}]
+    dict set mem conf [lrepeat $confsize {}]
+    set seg 0
+    foreach line [split $hexdata \n] {
+	if {[scan $line :%2x%4x%2x%s size addr tag data] != 4} {
+	    error "parse error"
+	}
+	if {$size & 1} {error "invalid data size"}
+	if {![string is xdigit -strict $data]} {error "invalid hex data"}
+	binary scan [binary format H* [string range $line 1 end]] cu* list
+	if {[checksum $list] != 0} {error "checksum error"}
+	# Remove the checksum
+	set data [string range $data 0 [expr {2 * $size - 1}]]
+	if {$tag == 0} {
+	    set addr [expr {($addr >> 1) + ($seg << 15)}]
+	    if {$addr >= $eebase + $datasize} {
+		# Bogus addresses
+	    } elseif {$addr >= $eebase} {
+		# Data memory
+		set addr [expr {$addr - $eebase}]
+		binary scan [binary format H* $data] su* list
+		dict update mem data data {
+		    foreach n $list {
+			lset data $addr [format 0x%02x [expr {$n & 0xff}]]
+			incr addr
 		    }
 		}
-	    } elseif {$tag == 4} {
-		scan $data %x seg
-	    } elseif {$tag == 1} {
-		# End of data
-		break
+	    } elseif {$addr >= $cfgbase} {
+		# Configuration bits
+		set addr [expr {($addr - $cfgbase) >> 1}]
+		binary scan [binary format H* $data] su* list
+		dict update mem conf data {
+		    foreach n $list {
+			lset data $addr [format 0x%04x $n]
+			incr addr
+		    }
+		}
+	    } else {
+		# Program memory
+		binary scan [binary format H* $data] su* list
+		dict update mem code data {
+		    foreach n $list {
+			lset data $addr [format 0x%04x $n]
+			incr addr
+		    }
+		}
+	    }
+	} elseif {$tag == 4} {
+	    scan $data %x seg
+	} elseif {$tag == 1} {
+	    # End of data
+	    break
+	}
+    }
+}
+
+proc upgrade::parsecod {file} {
+    global mem pic
+    package require readcod
+    codfile create cod $file
+    variable cpu [cod processor]
+    loadpic $cpu
+    dict with pic {}
+    dict set mem data [lrepeat $datasize {}]
+    dict set mem code [lrepeat $codesize {}]
+    dict set mem conf [lrepeat $confsize {}]
+    dict for {addr words} [cod code] {
+	set addr [expr {$addr >> 1}]
+	if {$addr < $codesize} {
+	    dict update mem code data {
+		foreach n $words {
+		    lset data $addr [format 0x%04x $n]
+		    incr addr
+		}
+	    }
+	} elseif {$addr >= $eebase && $addr < $eebase + $datasize} {
+	    set addr [expr {$addr - $eebase}]
+	    dict update mem data data {
+		foreach n $words {
+		    lset data $addr [format 0x%04x $n]
+		    incr addr
+		}
+	    }
+	} elseif {$addr >= $cfgbase && $addr < $cfgbase + $confsize} {
+	    set addr [expr {$addr - $cfgbase}]
+	    dict update mem conf data {
+		foreach n $words {
+		    lset data $addr [format 0x%04x $n]
+		    incr addr
+		}
 	    }
 	}
-	set csize [llength [lsearch -all -exact -not [dict get $mem code] {}]]
-	set dsize [llength [lsearch -all -exact -not [dict get $mem data] {}]]
-	set cocmd 0
-	set copct 0%
-	# Try to determine the version of the new firmware
-	set data [lsearch -all -inline -exact -not [dict get $mem data] {}]
-	set list [split [binary format c* $data] \0]
-	set rec [lsearch -inline $list {*OpenTherm Gateway*}]
-	set rec [string trimleft $rec A=]
-	scan $rec {OpenTherm Gateway %s} upversion
-	if {$fwvariant eq "gateway"} {
-	    variable eeold [eeprom $fwversion]
-	} else {
-	    variable eeold [eeprom 0]
+    }
+    cod destroy
+}
+
+proc upgrade::parsecof {file} {
+    global mem pic
+    package require readcof
+    coffile create cof $file
+    variable cpu [cof processor]
+    loadpic $cpu
+    dict with pic {}
+    dict set mem data [lrepeat $datasize {}]
+    dict set mem code [lrepeat $codesize {}]
+    dict set mem conf [lrepeat $confsize {}]
+    dict for {addr words} [cof code] {
+	# set addr [expr {$addr >> 1}]
+	if {$addr < $codesize} {
+	    dict update mem code data {
+		foreach n $words {
+		    lset data $addr [format 0x%04x $n]
+		    incr addr
+		}
+	    }
+	} elseif {$addr >= $eebase && $addr < $eebase + $datasize} {
+	    set addr [expr {$addr - $eebase}]
+	    dict update mem data data {
+		foreach n $words {
+		    lset data $addr [format 0x%04x $n]
+		    incr addr
+		}
+	    }
+	} elseif {$addr >= $cfgbase && $addr < $cfgbase + $confsize} {
+	    set addr [expr {$addr - $cfgbase}]
+	    dict update mem conf data {
+		foreach n $words {
+		    lset data $addr [format 0x%04x $n]
+		    incr addr
+		}
+	    }
 	}
-	variable eenew [eeprom $upversion]
-	if {[dict size $eenew] > 0 && [dict size $eeold] > 0} {
-	    set restore [expr {abs($restore)}]
-	    return [list success 1]
-	} else {
-	    set restore [expr {-abs($restore)}]
-	    return [list success 0]
-	}
-    } on error err {
-	return [list failed "Invalid firmware file: $err"]
+    }
+    cof destroy
+}
+
+proc upgrade::process {} {
+    global mem csize dsize cocmd copct devtype fwversion fwvariant restore
+    variable upversion 0
+    set csize [llength [lsearch -all -exact -not [dict get $mem code] {}]]
+    set dsize [llength [lsearch -all -exact -not [dict get $mem data] {}]]
+    set cocmd 0
+    set copct 0%
+    # Try to determine the version of the new firmware
+    set data [lsearch -all -inline -exact -not [dict get $mem data] {}]
+    set list [split [binary format c* $data] \0]
+    set rec [lsearch -inline $list {*OpenTherm Gateway*}]
+    set rec [string trimleft $rec A=]
+    scan $rec {OpenTherm Gateway %s} upversion
+    if {$fwvariant eq "gateway"} {
+	variable eeold [eeprom $fwversion]
+    } else {
+	variable eeold [eeprom 0]
+    }
+    variable eenew [eeprom $upversion]
+    if {[dict size $eenew] > 0 && [dict size $eeold] > 0} {
+	set restore [expr {abs($restore)}]
+	return [list success 1]
+    } else {
+	set restore [expr {-abs($restore)}]
+	return [list success 0]
     }
 }
 
@@ -220,6 +325,7 @@ proc upgrade::sendbreak {} {
     } elseif {$devtype eq "comport"} {
 	# Serial port
 	fileevent $dev readable {}
+	read $dev
 	fconfigure $dev -ttycontrol {BREAK 1}
 	set id [after 5 [list [info coroutine] sendbreak]]
 	while {[yield] ne "sendbreak"} {}
@@ -262,17 +368,22 @@ proc upgrade::resetcommand {} {
     return 1
 }
 
-proc upgrade::loadhex {cmd} {
-    global mem dev devtype cocmd cocnt copct restore fwvariant fwversion
+proc upgrade::loadfw {cmd} {
+    global mem dev devtype cocmd cocnt copct restore fwvariant fwversion pic
+    variable cpu
     variable retries
     variable upversion
     variable eeold
     variable eenew
     set ans ""
-    lassign [dict get $mem code] inst1 inst2
-    if {$inst1 != 0x158a || ($inst2 & 0x3E00) != 0x2600} {
-	set ans [$cmd check magic]
-	if {$ans ne "ok"} {return abort}
+    foreach inst [dict get $mem code] {mask match} [dict get $pic magic] {
+	if {$mask eq ""} break
+	if {($inst & $mask) != $match} {
+	    set ans [$cmd check magic]
+	    if {$ans ne "ok"} {return abort}
+	    break
+	}
+	lappend prog $match
     }
     try {
 	# Lock the OTGW connection, preventing others from sending commands
@@ -300,6 +411,7 @@ proc upgrade::loadhex {cmd} {
 	set cocnt 0
 	set cocmd 0
 	set copct 0%
+	set selfprogmode 0
 	$cmd status "Switching gateway to self-programming mode"
 	if {![sendbreak] || ![cowaitch 4 1000]} {
 	    # Send a reset serial command, if the firmware supports it.
@@ -322,13 +434,40 @@ proc upgrade::loadhex {cmd} {
 	    $cmd status "Could not put gateway into self-programming mode"
 	    return failed
 	}
+	set selfprogmode 1
 	$cmd status [format "Bootloader version %d.%d: %03X-%03X" \
 	  $maj $min $addr1 $addr2]
 
-	if {$ans ne "ok" && ($inst2 & 0x7ff | 0x800) != $addr1} {
+	if {$maj == 1} {
+	    if {$cpu ni {16f88}} {
+		throw {LOADFW INCOMPATIBLE} 16f88
+	    }
+	    # Unable to read config (PIC16F88)
+	} elseif {$maj == 2} {
+	    if {$cpu ni {16f1847}} {
+		throw {LOADFW INCOMPATIBLE} 16f1847
+	    }
+	    # Can read the Device ID / Revision ID @ 0x8006
+	    set rc [cocmd 6 1 [binary format s 0x06] 100 1]
+	} elseif {$maj == 3} {
+	    if {$cpu ni {16f18426}} {
+		throw {LOADFW INCOMPATIBLE} 16f18426
+	    }
+	    # Can read the DIA/DCI information @ 0x8200 & 0x8100
+	    set rc [cocmd 6 5 [binary format s 0x200] 100 1]
+	    set rc [cocmd 6 32 [binary format s 0x100] 200 1]
+	}
+
+	lassign [dict get $mem code] inst1 inst2
+	if {$inst1 == 0x158a} {
+	    set pclath 0x800
+	} elseif {($inst1 & 0x3f80) == 0x3180} {
+	    set pclath [expr {($inst1 & 0x78) << 8}]
+	} else {
+	    set pclath 0
+	}
+	if {$ans ne "ok" && ($inst2 & 0x7ff | $pclath) != $addr1} {
 	    if {[$cmd check call] ne "ok"} {
-		# Exit self-programming mode
-		cocmd 8 0 {} 0
 		return abort
 	    }
 	}
@@ -336,7 +475,8 @@ proc upgrade::loadhex {cmd} {
 	# Read the settings, if they should be restored
 	if {$restore == 1} {
 	    # Collect the data in blocks of 64 bytes
-	    for {set list {}; set i 0} {$i < 256} {incr i 64} {
+	    set eesize [dict get $pic datasize]
+	    for {set list {}; set i 0} {$i < $eesize} {incr i 64} {
 		set data [cocmd 4 64 [binary format s $i]]
 		binary scan $data x4cu* tmp
 		lappend list {*}$tmp
@@ -353,14 +493,16 @@ proc upgrade::loadhex {cmd} {
 
 	# Program memory
 	set code {}
-	for {set pc 0} {$pc < 0x1000} {incr pc 32} {
-	    if {$pc + 31 >= $addr1 && $pc <= $addr2} continue
-	    set row [lrange [dict get $mem code] $pc [expr {$pc + 31}]]
+	set size [dict get $pic erasesize]
+	for {set pc 0} {$pc < [dict get $pic codesize]} {incr pc $size} {
+	    if {$pc + $size - 1 >= $addr1 && $pc <= $addr2} continue
+	    set row [lrange [dict get $mem code] $pc [expr {$pc + $size - 1}]]
 	    set filled [lsearch -all -exact -not $row {}]
 	    if {[llength $filled] > 0} {
 		set first [expr {$pc + [lindex $filled 0]}]
 		set last [expr {$pc + [lindex $filled end]}]
 		lappend code [list $first $last]
+		# Single row: erase + program + verify
 		incr cocnt 3
 	    }
 	}
@@ -381,26 +523,20 @@ proc upgrade::loadhex {cmd} {
 	# state, so do not offer the option to cancel the download
 	$cmd go
 
-	# Fall-back in case programming the first row fails.
-	# An erased row has all ADDLW -1 commands. These will execute without
-	# doing any harm. By first putting a jump to the self-programming code
-	# in the second row, the device can still be recovered if programming
+	# Set up a fall-back in case programming the first row fails.
+	# An erased row has all harmless commands, either MOVWI [-1]FSR1 or
+	# ADDLW -1. By first putting a jump to the self-programming code in
+	# the second row, the device can still be recovered if programming
 	# fails between erasing and reprogramming the first row.
 
 	# Create the jump to self-programming code commands
-	if {$addr1 & 0x800} {
-	    # Self-programming code in the upper bank (normal situation)
-	    set prog [list 0x158a]	;# BSF PCLATH,3
-	} else {
-	    # Self-programming code in the lower bank
-	    set prog [list 0x118a]	;# BCF PCLATH,3
-	}
-	lappend prog [expr {0x2000 + ($addr1 & 0x7ff)}]	;# CALL SelfProg
-	lappend prog 0x118a		;# BCF PCLATH,3
-	lappend prog 0x2820		;# GOTO 0x20
+	set prog [apply [dict get $pic recover] $addr1]
 
 	# Program the fail-safe code
-	loadrow 32 $prog
+	incr errors [loadrow 32 $prog]
+	if {$errors > 0} {
+	    error "Failed to load fail-safe code"
+	}
 
 	# Start programming
 	foreach rec $code {
@@ -435,8 +571,6 @@ proc upgrade::loadhex {cmd} {
 	set cocmd $cocnt
 	set copct 100%
 	if {$errors == 0} {
-	    # Start the program
-	    cocmd 8 0 {} 0
 	    $cmd status "Firmware download succeeded - $retries retries"
 	    set fwversion $upversion
 	    if {$fwversion > 0} {
@@ -446,12 +580,19 @@ proc upgrade::loadhex {cmd} {
 	    }
 	}
 	return success
+    } trap {LOADFW INCOMPATIBLE} {detected} {
+	$cmd status "The selected firmware is not compatible with this device"
+	return failed
     } on error err {
 	debug $err
 	# puts stderr $::errorInfo
 	$cmd status "Firmware update failed - $errors errors"
 	return failed
     } finally {
+	if {$selfprogmode} {
+	    # Exit self programming mode and start the program
+	    cocmd 8 0 {} 0
+	}
 	# fileevent $dev readable $handler
 	# fconfigure $dev {*}[dict remove $config -peername -sockname]
 	# Get a fresh new connection
@@ -462,20 +603,29 @@ proc upgrade::loadhex {cmd} {
 }
 
 proc upgrade::loadrow {addr data} {
-    global cocnt
+    global cocnt pic
     variable retries
-    set str [format %04X: $addr]
-    foreach n $data {
-	append str [format " %04X" $n]
+    set size [dict get $pic groupsize]
+    set block [dict get $pic blockwrite]
+    if {$block} {
+	set skip [expr {$addr % $size}]
+	set prog [linsert $data 0 {*}[lrepeat $skip {}]]
+	while {[llength $prog] % $size} {lappend prog {}}
+	# set addr to the start of the block
+	set addr [expr {$addr - $skip}]
+	# The number of blocks to write
+	set cnt [expr {[llength $prog] / $size}]
+    } else {
+	set prog $data
+	set cnt [llength $prog]
     }
-    set prog [linsert $data 0 {*}[lrepeat [expr {$addr & 3}] {}]]
-    while {[llength $prog] & 3} {lappend prog {}}
-    set cnt [expr {[llength $prog] >> 2}]
     # Set the empty addresses to all ones
     foreach n [lsearch -all -exact $prog {}] {lset prog $n 0x3fff}
     for {set try 0} {$try < 3} {incr try;incr cocnt 3;incr retries} {
 	# Erase the row before reprogramming it
-	set rc [cocmd 3 1 [binary format s [expr {$addr & ~31}]]]
+	set rc [cocmd 3 1 [binary format s $addr]]
+	# Verify the row is erased
+	# set rc [cocmd 1 $size [binary format s $addr]]
 	# Program the row
 	set rc [cocmd 2 $cnt [binary format ss* $addr $prog]]
 	# Verify the row
@@ -506,7 +656,7 @@ proc upgrade::eeprom {version} {
 	4.0a9 4.0a9.1 4.0a10 4.0a11 4.0a11.1 4.0a11.2 4.0a12
     }
     if {$version == 0 || \
-      $version ni $supported && ![package vsatisfies $version 4.0b0-5.4]} {
+      $version ni $supported && ![package vsatisfies $version 4.0b0-6.1]} {
 	return {}
     }
     set rc {
@@ -671,7 +821,7 @@ namespace eval flash {
     }
 
     proc start {} {
-	coroutine coro upgrade loadhex [namespace current]
+	coroutine coro upgrade loadfw [namespace current]
     }
 
     proc status {msg} {

@@ -518,7 +518,7 @@ namespace eval webupgrade {
 
     proc start {cmd} {
 	variable coro $cmd
-	coroutine coro upgrade loadhex [namespace current]
+	coroutine coro upgrade loadfw [namespace current]
     }
 
     proc status {msg} {
