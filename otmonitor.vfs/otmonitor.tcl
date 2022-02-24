@@ -315,6 +315,22 @@ proc date {val} {
     return [format {%s %d} $mon $day]
 }
 
+proc sensor {val} {
+    set battery [expr {$val & 3}]
+    set signal [expr {$val >> 2 & 7}]
+    set index [expr {$val >> 8 & 15}]
+    set type [expr {$val >> 12 & 15}]
+    return [format {%d %d %d %d} $battery $signal $index $type]
+}
+
+proc opmode {val} {
+    set hc1 [expr {$val & 15}]
+    set hc2 [expr {$val >> 4 & 15}]
+    set dhw [expr {$val >> 8 & 15}]
+    set process [expr {$val >> 12 & 15}]
+    return [format {%d %d %d %04b} $hc1 $hc2 $dhw $process]
+}
+
 proc debug {str} {
     global verbose
     if {$verbose} {puts $str}
@@ -777,7 +793,18 @@ proc reportflags {msb lsb vals} {
 proc reportenum {name list val} {
     global cfg
     if {!$cfg(view,bitflags)} return
-    output "\t\t   - $name: [lindex $list $val] ($val)"
+    if {$val < [llength $list]} {
+	set str [lindex $list $val]
+    } else {
+	set str reserved
+    }
+    output "\t\t   - $name: $str ($val)"
+}
+
+proc reportvalue {name val} {
+    global cfg
+    if {!$cfg(view,bitflags)} return
+    output "\t\t   - $name: $val"
 }
 
 proc dump {} {
@@ -914,6 +941,61 @@ proc slavesolar {list} {
 	"loading by boiler"
 	"anti-legionella"
     } [expr {$flags >> 4 & 3}]
+    return 0
+}
+
+proc rfsensor {list} {
+    set flags [lindex $list 0]
+    reportenum "Battery indication" {
+	"no battery indication"
+	"low battery"
+	"nearly low battery"
+	"no low battery"
+    } [expr {$flags & 3}]
+    reportenum "RF signal" {
+	"no signal strength indication"
+	"strength 1/5"
+	"strength 2/5"
+	"strength 3/5"
+	"strength 4/5"
+	"strength 5/5"
+    } [expr {$flags >> 2 & 7}]
+    reportvalue "Index of sensor" [expr {$flags >> 8 & 15}]
+    if {$flags >> 12 < 15} {
+	reportenum "Type of sensor" {
+	    "room temp. controllers"
+	    "room temp. sensors"
+	    "outside temp. sensors"
+	} [expr {$flags >> 12 & 15}]
+    } else {
+	output "\t\t   - $name: not defined type (15)"
+    }
+    return 0
+}
+
+proc opermode {list} {
+    set flags [lindex $list 0]
+    set modes {
+	"No override"
+	"Auto"
+	"Comfort"
+	"Precomfort"
+	"Reduced"
+	"Protection"
+	"Off"
+    }
+    reportenum "Operating mode HC1" $modes [expr {$flags & 15}]
+    reportenum "Operating mode HC2" $modes [expr {$flags >> 4 & 15}]
+    reportenum "Operating mode DHW" {
+	"No override"
+	"Auto"
+	"Anti-legionella"
+	"Comfort"
+	"Reduced"
+	"Protection"
+	"Off"
+    } [expr {$flags >> 8 & 15}]
+    reportenum "Manual DHW push" {"no push" "push"} [expr {$flags >> 12 & 1}]
     return 0
 }
 
@@ -2092,6 +2174,10 @@ special 4 121 guishort chph chpumphours
 special 4 122 guishort dhwph dhwpumphours
 special 4 123 guishort dhwbh dhwburnerhours
 
+special 1 98 rfsensor
+special 5 98 rfsensor
+special 4 99 opermode
+
 # Class 1: Control and Status Information
 register 0	{flag8 flag8}	"Status"
 register 1	{f8.8}		"Control setpoint"
@@ -2154,8 +2240,8 @@ register 82	{f8.8}		"Exhaust inlet temperature"
 register 83	{f8.8}		"Exhaust outlet temperature"
 register 84	{u16}		"Exhaust fan speed"
 register 85	{u16}		"Inlet fan speed"
-register 98	{f8.8}		"RF sensor status information" ;# Data-type assumed
-register 99	{flag8 flag8}	"Operating Mode HC1, HC2/ Operating mode DHW"
+register 98	{sensor}	"RF sensor status information"
+register 99	{opmode}	"Operating mode HC1, HC2, DHW"
 register 109	{u16}		"Electricity producer starts"
 register 110	{u16}		"Electricity producer hours"
 register 111	{u16}		"Electricity production"
