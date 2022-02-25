@@ -1022,6 +1022,17 @@ proc asfflags {list} {
     }
     return 0
 }
+proc overrideflags {list} {
+    reportflags {
+    } {
+	"Manual change priority"	{"disable overrule" "enable overrule"}
+	"Program change priority"	{"disable overrule" "enable overrule"}
+    } $list
+    lassign $list - flags
+    guiflag manualoverrule [expr {($flags & 1) != 0}]
+    guiflag programoverrule [expr {($flags & 2) != 0}]
+    return 0
+}
 
 proc returntemp {list} {
     global gui
@@ -2124,11 +2135,7 @@ special 4 86 reportflags {
 } {
     "Nominal ventilation value"			{read-only read/write}
 }
-special 4 100 reportflags {
-} {
-    "Manual change priority"	{"disable overrule" "enable overrule"}
-    "Program change priority"	{"disable overrule" "enable overrule"}
-}
+special 4 100 overrideflags
 special 4 103 reportflags {
     "System type"		{"DHW preheat" "DHW parallel"}
 } {
