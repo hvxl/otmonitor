@@ -113,10 +113,15 @@ oo::class create codfile {
 	dict for {blknum ranges} $blocks {
 	    binary scan [my ReadBlock $blknum] su* words
 	    lassign $ranges start
-	    if {$start != $end + 1} {set addr $start}
+	    if {$start != $end + 1} {set addr [expr {$start >> 1}]}
+	    set x2 0
 	    foreach {start end} $ranges {
 		set page [expr {$start & ~0x1ff}]
 		set x1 [expr {($start - $page) >> 1}]
+		if {$x2 && $x1 > $x2 + 1} {
+		    set cnt [expr {$x1 - $x2 - 1}]
+		    dict lappend code $addr {*}[lrepeat $cnt {}]
+		}
 		set x2 [expr {($end - $page) >> 1}]
 		dict lappend code $addr {*}[lrange $words $x1 $x2]
 	    }

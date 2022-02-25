@@ -41,13 +41,7 @@ proc upgrade::readfw {file} {
 }
 
 proc upgrade::parsehex {hexdata} {
-    global mem pic
-    variable cpu [cpu]
-    loadpic $cpu
-    dict with pic {}
-    dict set mem data [lrepeat $datasize {}]
-    dict set mem code [lrepeat $codesize {}]
-    dict set mem conf [lrepeat $confsize {}]
+    set mem {}
     set seg 0
     foreach line [split $hexdata \n] {
 	if {[scan $line :%2x%4x%2x%s size addr tag data] != 4} {
@@ -61,36 +55,16 @@ proc upgrade::parsehex {hexdata} {
 	set data [string range $data 0 [expr {2 * $size - 1}]]
 	if {$tag == 0} {
 	    set addr [expr {($addr >> 1) + ($seg << 15)}]
-	    if {$addr >= $eebase + $datasize} {
-		# Bogus addresses
-	    } elseif {$addr >= $eebase} {
-		# Data memory
-		set addr [expr {$addr - $eebase}]
-		binary scan [binary format H* $data] su* list
-		dict update mem data data {
-		    foreach n $list {
-			lset data $addr [format 0x%02x [expr {$n & 0xff}]]
-			incr addr
-		    }
-		}
-	    } elseif {$addr >= $cfgbase} {
-		# Configuration bits
-		set addr [expr {($addr - $cfgbase) >> 1}]
-		binary scan [binary format H* $data] su* list
-		dict update mem conf data {
-		    foreach n $list {
-			lset data $addr [format 0x%04x $n]
-			incr addr
-		    }
-		}
-	    } else {
-		# Program memory
-		binary scan [binary format H* $data] su* list
-		dict update mem code data {
-		    foreach n $list {
-			lset data $addr [format 0x%04x $n]
-			incr addr
-		    }
+	    binary scan [binary format H* $data] su* list
+	    set page [expr {$addr & ~0xff}]
+	    if {![dict exists $mem $page]} {
+		dict set mem $page [lrepeat 256 {}]
+	    }
+	    set index [expr {$addr - $page}]
+	    dict update mem $page data {
+		foreach n $list {
+		    lset data $index $n
+		    incr index
 		}
 	    }
 	} elseif {$tag == 4} {
@@ -100,64 +74,46 @@ proc upgrade::parsehex {hexdata} {
 	    break
 	}
     }
+    # Try to determine the target device
+    if {![dict exists $mem [expr 0x8000]]} {
+	set cpu 16f88
+    } elseif {[dict exists $mem [expr 0x3800]]} {
+	set cpu 16f18426
+    } else {
+	set cpu 16f1847
+    }
+    populate $cpu $mem
 }
 
 proc upgrade::parsecod {file} {
-    global mem pic
     package require readcod
     codfile create cod $file
-    variable cpu [cod processor]
-    loadpic $cpu
-    dict with pic {}
-    dict set mem data [lrepeat $datasize {}]
-    dict set mem code [lrepeat $codesize {}]
-    dict set mem conf [lrepeat $confsize {}]
-    dict for {addr words} [cod code] {
-	set addr [expr {$addr >> 1}]
-	if {$addr < $codesize} {
-	    dict update mem code data {
-		foreach n $words {
-		    lset data $addr [format 0x%04x $n]
-		    incr addr
-		}
-	    }
-	} elseif {$addr >= $eebase && $addr < $eebase + $datasize} {
-	    set addr [expr {$addr - $eebase}]
-	    dict update mem data data {
-		foreach n $words {
-		    lset data $addr [format 0x%04x $n]
-		    incr addr
-		}
-	    }
-	} elseif {$addr >= $cfgbase && $addr < $cfgbase + $confsize} {
-	    set addr [expr {$addr - $cfgbase}]
-	    dict update mem conf data {
-		foreach n $words {
-		    lset data $addr [format 0x%04x $n]
-		    incr addr
-		}
-	    }
-	}
-    }
+    populate [cod processor] [cod code]
     cod destroy
 }
 
 proc upgrade::parsecof {file} {
-    global mem pic
     package require readcof
     coffile create cof $file
-    variable cpu [cof processor]
+    populate [cof processor] [cof code]
+    cof destroy
+}
+
+proc upgrade::populate {processor code} {
+    global mem pic
+    variable cpu $processor
     loadpic $cpu
     dict with pic {}
     dict set mem data [lrepeat $datasize {}]
     dict set mem code [lrepeat $codesize {}]
     dict set mem conf [lrepeat $confsize {}]
-    dict for {addr words} [cof code] {
-	# set addr [expr {$addr >> 1}]
+    dict for {addr words} $code {
 	if {$addr < $codesize} {
 	    dict update mem code data {
 		foreach n $words {
-		    lset data $addr [format 0x%04x $n]
+		    if {$n ne ""} {
+			lset data $addr [format 0x%04x $n]
+		    }
 		    incr addr
 		}
 	    }
@@ -165,7 +121,9 @@ proc upgrade::parsecof {file} {
 	    set addr [expr {$addr - $eebase}]
 	    dict update mem data data {
 		foreach n $words {
-		    lset data $addr [format 0x%04x $n]
+		    if {$n ne ""} {
+			lset data $addr [format 0x%02x $n]
+		    }
 		    incr addr
 		}
 	    }
@@ -173,13 +131,14 @@ proc upgrade::parsecof {file} {
 	    set addr [expr {$addr - $cfgbase}]
 	    dict update mem conf data {
 		foreach n $words {
-		    lset data $addr [format 0x%04x $n]
+		    if {$n ne ""} {
+			lset data $addr [format 0x%04x $n]
+		    }
 		    incr addr
 		}
 	    }
 	}
     }
-    cof destroy
 }
 
 proc upgrade::process {} {
