@@ -1083,6 +1083,8 @@ proc gui::cfggeneral {w} {
     pack $w.f2 -fill x -side top -pady 8
 
     learn GW
+
+    focus $w.f2.e
 }
 
 proc gui::cfgconnection {w} {
