@@ -143,11 +143,13 @@ proc upgrade::populate {processor code} {
 
 proc upgrade::process {} {
     global mem csize dsize cocmd copct devtype fwversion fwvariant restore
+    global fwdevice
     variable upversion 0
     set csize [llength [lsearch -all -exact -not [dict get $mem code] {}]]
     set dsize [llength [lsearch -all -exact -not [dict get $mem data] {}]]
     set cocmd 0
     set copct 0%
+    set fwdevice ""
     # Try to determine the version of the new firmware
     set data [lsearch -all -inline -exact -not [dict get $mem data] {}]
     set list [split [binary format c* $data] \0]
@@ -329,6 +331,7 @@ proc upgrade::resetcommand {} {
 
 proc upgrade::loadfw {cmd} {
     global mem dev devtype cocmd cocnt copct restore fwvariant fwversion pic
+    global fwdevice
     variable cpu
     variable retries
     variable upversion
@@ -408,13 +411,37 @@ proc upgrade::loadfw {cmd} {
 	    }
 	    # Can read the Device ID / Revision ID @ 0x8006
 	    set rc [cocmd 6 1 [binary format s 0x06] 100 1]
+	    if {[binary scan $rc x4su devid]} {
+		set revision [expr {$devid & 0x1f}]
+		set devid [expr {$devid >> 5}]
+		if {$devid == 0b010100100} {
+		    set fwdevice "PIC16F1847 rev $revision"
+		} elseif {$devid == 0b010100101} {
+		    set fwdevice "PIC16LF1847 rev $revision"
+		}
+	    }
 	} elseif {$maj == 3} {
 	    if {$cpu ni {16f18426}} {
 		throw {LOADFW INCOMPATIBLE} 16f18426
 	    }
+	    # Can read the Device ID / Revision ID @ 0x8006 & 0x8005
+	    set rc [cocmd 6 2 [binary format s 0x05] 100 1]
+	    if {[binary scan $rc x4susu revid devid]} {
+		set revision [format %d.%d \
+		  [expr {$revid >> 6 & 0x3f}] [expr {$revid & 0x3f}]]
+		if {$devid == 0x30d2} {
+		    set fwdevice "PIC16F18426 rev $revision"
+		} elseif {$devid == 0x30d3} {
+		    set fwdevice "PIC16LF18426 rev $revision"
+		} elseif {$devid == 0x30d4} {
+		    set fwdevice "PIC16F18446 rev $revision"
+		} elseif {$devid == 0x30d5} {
+		    set fwdevice "PIC16LF18446 rev $revision"
+		}
+	    }
 	    # Can read the DIA/DCI information @ 0x8200 & 0x8100
-	    set rc [cocmd 6 5 [binary format s 0x200] 100 1]
-	    set rc [cocmd 6 32 [binary format s 0x100] 200 1]
+	    # set rc [cocmd 6 5 [binary format s 0x200] 100 1]
+	    # set rc [cocmd 6 32 [binary format s 0x100] 200 1]
 	}
 
 	lassign [dict get $mem code] inst1 inst2

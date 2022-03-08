@@ -1913,8 +1913,11 @@ proc gui::upgradedlg {} {
       -text "Transfer old EEPROM settings to the new firmware"
     ttk::button .fw.bb1 -image [img view.png] \
       -command [namespace code showsettings]
-    ttk::label .fw.l6a -text "Status:"
-    ttk::label .fw.l6b -width 1 -textvariable fwstatus
+    ttk::frame .fw.f6
+    ttk::label .fw.f6.l1 -width 1 -textvariable fwstatus
+    ttk::label .fw.f6.l2 -textvariable fwdevice
+    pack .fw.f6.l2 -side right
+    pack .fw.f6.l1 -fill x
     ttk::separator .fw.sep
     ttk::frame .fw.f4
     ttk::button .fw.f4.b1 -text "Program" -width 8 -state disabled \
@@ -1929,7 +1932,7 @@ proc gui::upgradedlg {} {
     grid .fw.f4 - - -padx 2 -pady 5
     grid .fw.bb1 -column 2 -row 5
     grid .fw.sep - - -padx 2 -sticky ew
-    grid .fw.l6b - - -padx 2 -pady 0 -sticky ew
+    grid .fw.f6 - - -padx 2 -pady 0 -sticky ew
 
     ::tk::PlaceWindow .fw widget .
     .fw.fn3 icursor end
