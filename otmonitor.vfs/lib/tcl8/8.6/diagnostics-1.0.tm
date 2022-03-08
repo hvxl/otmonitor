@@ -58,6 +58,7 @@ proc diag::receive {fd} {
     variable text
     if {[eof $fd]} {
 	close $fd
+	return
     }
     set rec [lassign [split [read $fd] \b] str]
     $text insert end $str
@@ -156,7 +157,9 @@ proc diag::cursor {w} {
 proc diag::finish {} {
     global dev
     variable fileevent
-    if {[info exists dev]} {fileevent $dev readable $fileevent}
+    if {[info exists dev] && $dev in [chan names]} {
+	fileevent $dev readable $fileevent
+    }
 }
 
 namespace import diag::*

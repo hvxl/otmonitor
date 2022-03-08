@@ -1,6 +1,6 @@
 # A file selection mega widget
 # Copyright (C) Schelte Bron.  Freely redistributable.
-# Version 2.0 - 20 Mar 2020
+# Version 2.1 - 8 Sep 2021
 
 namespace eval ttk::fsdialog {
     package require Tk 8.6.6-
@@ -60,6 +60,26 @@ proc ttk::fsdialog::joinfile {path file} {
     }
 }
 
+proc ttk::fsdialog::reduce {path} {
+    # Remove "." and ".." elements from the path. Can't use [file normalize]
+    # because symbolic links must stay intact.
+    set parts [lassign [file split [file join [pwd] $path]] root]
+    if {$root eq "/" || [file exists $root]} {
+	set rec [file split [file normalize $root]]
+    } else {
+	set rec [file split [file join [pwd] ./$root]]
+    }
+    foreach part $parts {
+	if {$part eq "."} continue
+	if {$part eq ".."} {
+	    if {[llength $rec] > 1} {set rec [lrange $rec 0 end-1]}
+	} else {
+	    lappend rec $part
+	}
+    }
+    return [file join {*}$rec]
+}
+
 proc ttk::fsdialog::dialog {cmd child arglist} {
     variable result
     if {[llength $arglist] % 2 == 0 && [dict exists $arglist -parent]} {
@@ -79,7 +99,7 @@ proc ttk::fsdialog::dialog {cmd child arglist} {
     set var [namespace which -variable result]($w)
     $cmd $w {*}$arglist -resultvariable $var
     wm transient $w $parent
-    vwait $var
+    tkwait window $w
     return $result($w)
 }
 
@@ -139,7 +159,7 @@ proc ttk::fsdialog::readcfg {} {
         catch {
 	    if {[dict exists $data history]} {
 		set history [lmap n [dict get $data history] {
-		    set file [string trimleft $n]
+		    set file [string trimleft [file normalize $n]]
 		    if {$file eq ""} continue
 		    set file
 		}]
@@ -165,7 +185,7 @@ proc ttk::fsdialog::readcfg {} {
     if {[llength [dict get $config history]] == 0} {
 	set history {}
 	foreach n [list / ~/.. ~ ~/Documents ~/Desktop [pwd]] {
-	    set dir [file nativename [file normalize $n]]
+	    set dir [file normalize $n]
 	    if {$dir ni $history} {lappend history $dir}
 	}
 	dict set config history $history
@@ -201,10 +221,12 @@ proc ttk::fsdialog::history {args} {
     if {[llength $args] == 0} {
 	return $history
     }
-    foreach entry $args {
-	set history [lsearch -all -inline -exact -not $history $entry]
-    }
-    dict set config history [lrange [linsert $history 0 {*}$args] 0 49]
+    set list [lmap entry $args {
+	set path [file normalize $entry]
+	set history [lsearch -all -inline -exact -not $history $path]
+	set path
+    }]
+    dict set config history [lrange [linsert $history 0 {*}$list] 0 49]
     return
 }
 
@@ -222,6 +244,10 @@ proc ttk::fsdialog::histfiles {{size 10}} {
     # Only return existing files
     return [lrange \
       [glob -nocomplain -type f {*}[history]] 0 [expr {$size - 1}]]
+}
+
+proc ttk::fsdialog::globall {path {types {}}} {
+    return [glob -nocomplain -types $types -path $path *]
 }
 
 proc ttk::fsdialog::subdirs {dir} {
@@ -263,6 +289,12 @@ proc ttk::fsdialog::geometry {dlg args} {
 }
 
 if {$::tcl_platform(platform) eq "windows"} {
+    proc ttk::fsdialog::globall {path {types {}}} {
+	set rc [glob -nocomplain -types $types -path $path *]
+	lappend types hidden
+	lappend rc {*}[glob -nocomplain -types $types -path $path *]
+    }
+
     proc ttk::fsdialog::subdirs {dir} {
 	try {
 	    set subdirs [glob -nocomplain -directory $dir -types d *]
@@ -630,26 +662,6 @@ namespace eval ::ttk::fsdialog {
     option add *TkFDialog*Menu.relief solid startupFile
 }
 
-# Borderless treeview
-ttk::style configure Borderless.Treeview -borderwidth 0 -padding 1
-
-# Create a treeview style without an indicator
-ttk::style layout Listbox.Treeview {
-    Treeview.padding -sticky nswe -children {
-	Treeview.treearea -sticky nswe
-    }
-}
-ttk::style configure Listbox.Treeview.Heading -padding {4 0}
-ttk::style configure Listbox.Treeview.Item -padding {2 0}
-ttk::style layout Listbox.Treeview.Item {
-    Treeitem.padding -sticky nswe -children {
-	Treeitem.image -side left -sticky {}
-	Treeitem.focus -side left -sticky {} -children {
-	    Treeitem.text -side left -sticky {}
-	}
-    }
-}
-
 # Helper megawidgets
 
 ::tk::Megawidget create ::ttk::fsdialog::FocusWidget ::tk::SimpleWidget {
@@ -681,7 +693,7 @@ ttk::style layout Listbox.Treeview.Item {
 	return {
 	    {-cursor cursor Cursor {}}
 	    {-height height Height 300}
-	    {-takefocus takeFocus TakeFocus {}}
+	    {-takefocus takeFocus TakeFocus 0}
 	    {-title {} {} {}}
 	    {-width width Width 200}
 	}
@@ -692,14 +704,16 @@ ttk::style layout Listbox.Treeview.Item {
 	next
 	$w configure -height $options(-height) -width $options(-width)
 	grid propagate $w 0
+	bind $hull <<ThemeChanged>> [list [namespace which my] ThemeInit]
     }
 
     method Create {} {
 	my variable options
 	variable watch {}
 	variable tv $hull.treeview
-	ttk::treeview $tv -style Borderless.Treeview -selectmode browse \
-	  -columns watch -displaycolumns {} \
+	my ThemeInit
+	ttk::treeview $tv -style Borderless.FSDialog.Treeview \
+	  -selectmode browse -columns watch -displaycolumns {} \
 	  -yscrollcommand [list $hull.vscroll set] \
 	  -xscrollcommand [list $hull.hscroll set]
 	if {$options(-title) eq ""} {
@@ -727,28 +741,43 @@ ttk::style layout Listbox.Treeview.Item {
 	bind $tv <<TreeviewClose>> [list [namespace which my] Close]
 	bind $tv <<TreeviewSelect>> \
 	  [list event generate $hull <<ListboxSelect>>]
+	bind $tv <Return> \
+	  "[list event generate $hull <<DirectorySelect>>];break"
 
 	variable fd [fswatch create [list [namespace which my] Watch]]
     }
 
-    method Build {path} {
+    method TreeItem {name} {
 	my variable tv
-	if {![$tv exists $path]} {
-	    set parent [file dirname $path]
-	    if {$parent ne $path} {
-		my Build $parent
+	if {![$tv exists $name]} {
+	    if {![file isdirectory $name]} {
+		throw {POSIX ENOENT {no such file or directory}} \
+                  "could not read directory \"$name\":\
+		  no such file or directory"
+	    }
+	    set parent [file dirname $name]
+	    if {$parent ne $name} {
+		try {
+		    my TreeItem $parent
+		} trap {POSIX EACCES} {} {
+		    # Special treatment if the parent directory is not readable
+		    $tv insert $parent end -id $name \
+		      -text [file tail $name] -open 1 -tags dir
+		    set dot [file join $parent .]
+		    if {[$tv exists $dot]} {$tv delete $dot}
+		    $tv item $parent -open 1
+		    $tv tag add open $parent
+		}
 	    } else {
 		foreach n [file volumes] {
-		    $tv insert {} end \
-		      -id $n -text [file nativename $n] -tags dir
-		    $tv insert $n end -id $n.
+                    $tv insert {} end \
+                      -id $n -text [file nativename $n] -tags dir
+                    $tv insert $n end -id $n.
 		}
 	    }
-	    if {![$tv exists $path]} {
-		my Glob $parent {.* *}
-	    }
-	    my Glob $path
 	}
+	my Glob $name
+	return $name
     }
 
     method Open {} {
@@ -768,7 +797,9 @@ ttk::style layout Listbox.Treeview.Item {
 	} trap POSIX {- err} {
 	    ttk::fsdialog::posixerror $tv [dict get $err -errorcode] \
 	      {Cannot change to the directory "%s"} [file nativename $path]
-	    after idle [list $tv item $path -open false]
+	    if {[$tv exists [file join $path .]]} {
+		after idle [list $tv item $path -open false]
+	    }
 	}
     }
 
@@ -779,22 +810,31 @@ ttk::style layout Listbox.Treeview.Item {
 
     method Glob {dir {pat *}} {
 	my variable tv fd watch
-	set list [glob -nocomplain -directory $dir -tails -type d {*}$pat]
+	set list [glob -nocomplain -directory $dir -tails -types d {*}$pat]
+	lappend list \
+	  {*}[glob -nocomplain -directory $dir -tails -types {d hidden} {*}$pat]
 	set sort [lsort -dictionary $list]
-	$tv delete [$tv children $dir]
+	$tv tag add delete [$tv children $dir]
 	set w [$tv column #0 -width]
 	set offs [expr {[llength [file split $dir]] * 20 + 40}]
 	foreach d $sort {
 	    if {$d in {. ..}} continue
 	    if {[string match */ $dir]} {set id $dir$d} else {set id $dir/$d}
-	    $tv insert $dir end -id $id -text $d -tags dir
+	    if {[$tv exists $id]} {
+		$tv tag remove delete [list $id]
+	    } else {
+		$tv insert $dir end -id $id -text $d -tags dir
+	    }
 	    set w [expr {max($w, $offs + [font measure TkDefaultFont $d])}]
-	    if {[ttk::fsdialog::subdirs $id]} {
-		$tv insert $id end -id [file join $id .]
+	    if {[llength [$tv children $id]] == 0} {
+		if {[ttk::fsdialog::subdirs $id]} {
+		    $tv insert $id end -id [file join $id .]
+		}
 	    }
 	}
+	$tv delete [$tv tag has delete]
 	$tv tag add visited [list $dir]
-	if {[$tv set $dir watch] eq ""} {
+	if {[$tv set $dir watch] eq "" && [file readable $dir]} {
 	    set id [fswatch add $fd $dir \
 	      {create delete move deleteself moveself}]
 	    $tv set $dir watch $id
@@ -846,7 +886,15 @@ ttk::style layout Listbox.Treeview.Item {
 	# Make sure the selected directory is in view when the window
 	# becomes visible for the first time
 	bind $tv <Map> {}
+	# For some reason this is needed for "see" to work correctly
+	$tv yview
 	$tv see [lindex [$tv selection] 0]
+    }
+
+    method ThemeInit {} {
+	# Borderless treeview
+	ttk::style configure Borderless.FSDialog.Treeview \
+	  -borderwidth 0 -padding 1
     }
 
     method close {dir} {
@@ -864,19 +912,19 @@ ttk::style layout Listbox.Treeview.Item {
 
     method set {dir} {
 	my variable tv
-	if {![$tv exists $dir]} {
-	    if {[file isdirectory $dir]} {
-		my Build [file normalize $dir]
-	    } else {
+	try {
+	    if {[my TreeItem [ttk::fsdialog::reduce $dir]] eq ""} {
 		throw {POSIX ENOENT {no such file or directory}} \
 		  "couldn't change working directory to \"$dir\":\
 		  no such file or directory"
 	    }
+	} finally {
+	    if {[$tv exists $dir]} { 
+		$tv selection set [list $dir]
+		$tv focus $dir
+		$tv see $dir
+	    }
 	}
-	my open $dir
-	$tv selection set [list $dir]
-	$tv yview moveto 1
-	$tv see $dir
     }
 
     method get {} {
@@ -891,7 +939,11 @@ ttk::style layout Listbox.Treeview.Item {
 	    if {[$tv exists $dir]} {
 		$tv item $dir -open 1
 		$tv tag add open [list $dir]
-		my Glob $dir
+		try {
+		    my Glob $dir
+		} trap {POSIX EACCES} {} {
+		    # Directory is not readable
+		}
 	    }
 	}
 	while {![$tv exists $cwd]} {
@@ -926,6 +978,7 @@ ttk::style layout Listbox.Treeview.Item {
 	    {-multiple "" "" 0}
 	    {-reverse "" "" 0}
 	    {-sortkey "" "" name}
+	    {-takefocus takeFocus TakeFocus 0}
 	}
     }
 
@@ -1067,23 +1120,15 @@ ttk::style layout Listbox.Treeview.Item {
 	if {$options(-mixed) eq "split"} {
 	    set list [lsort -index 6 $list]
 	}
-	if {$options(-filter) eq "*"} {
-	} elseif {$options(-mixed) eq "files"} {
-	    set list [lsearch -all -inline -index 0 $list $options(-filter)]
-	} else {
-	    set keep [lsearch -all -index 0 $list $options(-filter)]
-	    set k [lindex $keep [set x 0]]
-	    set i -1
-	    set list [lmap n $list {
-		if {[incr i] == $k} {
-		    set k [lindex $keep [incr x]]
-		} elseif {[lindex $n 6] eq "file"} {
-		    continue
-		}
-		set n
-	    }]
+	if {$options(-filter) eq "*"} {return $list}
+	set keep {}
+	if {$options(-mixed) ne "files"} {
+	    lappend keep {*}[lsearch -all -index 6 -exact -not $list file]
 	}
-	return $list
+	foreach pat $options(-filter) {
+	    lappend keep {*}[lsearch -all -index 0 $list $pat]
+	}
+	return [lmap i [lsort -unique -integer $keep] {lindex $list $i}]
     }
 
     method configure {args} {
@@ -1110,17 +1155,19 @@ ttk::style layout Listbox.Treeview.Item {
 	if {$watchid ne ""} {
 	    fswatch remove $fd $watchid
 	}
-	set cwd [file join [pwd] [file normalize $dir]]
+	set cwd [reduce $dir]
 	set files {}
-	foreach n [glob -nocomplain -directory $cwd *] {
-	    # Dangling symbolic links may produce an error
-	    catch {lappend files [my FileStat $n 0]}
+	if {[file readable $cwd]} {
+	    foreach n [glob -nocomplain -directory $cwd *] {
+		# Dangling symbolic links may produce an error
+		catch {lappend files [my FileStat $n 0]}
+	    }
+	    foreach n [glob -nocomplain -directory $cwd -types hidden *] {
+		catch {lappend files [my FileStat $n 1]}
+	    }
+	    set watchid [fswatch add $fd $cwd \
+	      {create delete move attrib closewrite modify}]
 	}
-	foreach n [glob -nocomplain -directory $cwd -types hidden *] {
-	    catch {lappend files [my FileStat $n 1]}
-	}
-	set watchid [fswatch add $fd $cwd \
-	  {create delete move attrib closewrite modify}]
 	my SortFiles
     }
 
@@ -1140,17 +1187,53 @@ ttk::style layout Listbox.Treeview.Item {
     }
 }
 
-auto_load tk::IconList
+if {![info object isa object tk::IconList]} {auto_load tk::IconList}
+
+# Fix some methods of IconList
+oo::define ::tk::IconList {
+    method DrawSelection {} {
+	$canvas delete selection
+	$canvas itemconfigure selectionText -fill $fill
+	$canvas dtag selectionText
+	set cbg [ttk::style lookup TEntry -selectbackground focus]
+	set cfg [ttk::style lookup TEntry -selectforeground focus]
+	foreach item $selection {
+	    set rTag [lindex $list $item 2]
+	    lassign $itemList($rTag) iTag tTag text serial
+
+    	    set bbox [$canvas bbox $iTag $tTag]
+	    lassign $bbox left top
+	    lset bbox 0 [incr left -1]
+	    lset bbox 1 [incr top -1]
+	    $canvas create rect $bbox -fill $cbg -outline $cbg \
+	      -tags selection
+	    $canvas itemconfigure $tTag -fill $cfg
+	    $canvas addtag selectionText withtag $tTag
+	}
+	$canvas lower selection
+	return
+    }
+
+    method get item {
+	set rTag [lindex $list $item 2]
+	if {[info exists itemList($rTag)]} {
+	    lassign $itemList($rTag) iTag tTag text serial
+	    return $text
+	}
+    }
+}
 
 ::tk::Megawidget create ::ttk::fsdialog::ShortFileList \
   {::ttk::fsdialog::FileList tk::IconList} {
     method Create {} {
-	my variable parts image
+	my variable parts image canvas
 	set parts {}
 	dict set image dir $::tk::Priv(folderImage)
 	dict set image file $::tk::Priv(fileImage)
 	next
 	nextto tk::IconList
+	my ThemeInit
+	bind $canvas <<ThemeChanged>> [list [namespace which my] ThemeInit]
     }
 
     method Update {name} {
@@ -1197,12 +1280,16 @@ auto_load tk::IconList
     }
 
     method Btn1 {x y} {
-	my variable canvas
+	my variable w canvas list image
 	focus $canvas
 	set i [my index @$x,$y]
 	if {$i eq ""} return
 	my selection set [list [my get $i]]
 	my selection anchor $i
+	set iTag [lindex $list $i 0]
+	if {[$canvas itemcget $iTag -image] eq [dict get $image dir]} {
+	    event generate $w <<DirectorySelect>> -when tail
+	}
     }
 
     method CtrlBtn1 {x y} {
@@ -1254,6 +1341,41 @@ auto_load tk::IconList
 
     method FocusOut {} {
 	my state !focus
+    }
+
+    method ThemeInit {} {
+	my variable canvas fill
+	# Copy the theme colors for treeview widgets to the canvas
+	$canvas configure -background \
+	  [ttk::style lookup Treeview -background {} white]
+	set fill [ttk::style lookup Treeview -foreground {} black]
+	# Change all existing text items
+	$canvas itemconfigure text -fill $fill
+    }
+
+    method UpDown {amount} {
+	set curr [my selection get]
+	if {[llength $curr] == 0} {
+	    set pos 0
+	} else {
+	    set pos [my index anchor]
+	    if {$pos eq ""} return
+	    incr pos $amount
+	}
+	set sel [my get $pos]
+	if {$sel eq ""} return
+	my selection set [list $sel]
+	my selection anchor $pos
+	my see $sel
+    }
+
+    method LeftRight {amount} {
+	my variable itemsPerColumn
+	my UpDown [expr {$amount * $itemsPerColumn}]
+    }
+
+    method KeyPress {key} {
+	# Prevent IconList KeyPress method
     }
 
     method deleteall {} {
@@ -1324,8 +1446,10 @@ auto_load tk::IconList
 	variable owner {} group {} perm {} timeformat {%Y-%m-%d %T}
 	variable sort {item none dir down}
 
+	my ThemeInit
 	next
-	set tv [ttk::treeview $w.tv -style Listbox.Treeview \
+	bind $w <<ThemeChanged>> [list [namespace which my] ThemeInit]
+	set tv [ttk::treeview $w.tv -style Listbox.FSDialog.Treeview \
 	  -yscrollcommand [list $w.vs set] -xscrollcommand [list $w.hs set] \
 	  -columns {size date perm owner group filler}]
 	if {$::tcl_platform(platform) eq "windows"} {
@@ -1368,6 +1492,12 @@ auto_load tk::IconList
 	bind $tv <<TreeviewSelect>> \
 	  [list event generate $w <<ListboxSelect>>]
 	bind $tv <Double-1> "[list [namespace which my] invoke];break"
+	bind $tv <Up> [list [namespace which my] KeyNav]
+	bind $tv <Down> [list [namespace which my] KeyNav]
+	bind $tv <Right> [list [namespace which my] KeyNav]
+	bind $tv <Left> [list [namespace which my] KeyNav]
+	$tv tag bind dir <1> \
+	  [list event generate $w <<DirectorySelect>> -when tail]
     }
 
     method Owner {file uid gid} {
@@ -1469,6 +1599,47 @@ auto_load tk::IconList
 	event generate $w <<FileListSort>>
     }
 
+    method KeyNav {} {
+	my variable tv
+	if {[$tv focus] eq "" && [llength [$tv children {}]]} {
+	    # The default navigation code doesn't do anything when there is
+	    # no focus item.
+	    $tv focus [lindex [$tv selection] 0]
+	    if {[$tv focus] eq ""} {
+		$tv focus [lindex [$tv children {}] 0]
+		ttk::treeview::Keynav $tv stay
+		return -code break
+	    }
+	}
+    }
+
+    method ThemeInit {} {
+	if {[llength [ttk::style configure Listbox.FSDialog.Treeview.Item]]} {
+	    return
+	}
+
+	# Create a treeview style without an indicator
+	ttk::style layout Listbox.FSDialog.Treeview {
+	    Treeview.padding -sticky nswe -children {
+		Treeview.treearea -sticky nswe
+	    }
+	}
+	ttk::style configure Listbox.FSDialog.Treeview.Heading -padding {4 0}
+	ttk::style configure Listbox.FSDialog.Treeview.Item -padding {2 0}
+	ttk::style layout Listbox.FSDialog.Treeview.Item {
+	    Treeitem.padding -sticky nswe -children {
+		Treeitem.image -side left -sticky {}
+		Treeitem.focus -side left -sticky {} -children {
+		    Treeitem.text -side left -sticky {}
+		}
+	    }
+	}
+
+	set font [ttk::style lookup FSDialog.Treeview -font {} TkDefaultFont]
+	ttk::style configure FSDialog.Treeview \
+	  -rowheight [expr {[font metrics $font -linespace] + 2}]
+    }
+
     method configure {args} {
 	my variable tv options
 	set sortkey $options(-sortkey)
@@ -1527,13 +1698,15 @@ auto_load tk::IconList
 
 ::tk::Megawidget create ::ttk::fsdialog::chooseDirectory {} {
     constructor {args} {
-	variable result ""
+	variable result "" afteridle ""
 	namespace path [linsert [namespace path] end ::ttk::fsdialog]
 	next {*}$args
     }
 
     destructor {
-	my variable options result
+	my variable options result w afteridle
+	after cancel $afteridle
+	event generate $w <<FSDialogDone>> -data $result
 	next
 	savecfg
 	uplevel #0 [list set $options(-resultvariable) $result]
@@ -1562,7 +1735,12 @@ auto_load tk::IconList
 	my variable w options cwd
 	namespace upvar ::tk Priv img
 
-	wm geometry $w [dict get [readcfg] dirdialog geometry]
+	# on Android, use a full screen dialog
+	if {[info exists ::tk::android] && $::tk::android} {
+	    wm attributes $w -fullscreen 1
+	} else {
+	    wm geometry $w [dict get [readcfg] dirdialog geometry]
+	}
 
 	variable toolbar [ttk::frame $w.toolbar]
 	set list [histdirs]
@@ -1576,15 +1754,15 @@ auto_load tk::IconList
 	    if {[info exists img(${n}DimImage)]} {
 		lappend image disabled $img(${n}DimImage)
 	    }
-	    ttk::button $w.toolbar.$n -style Toolbutton -image $image \
+	    ttk::button $w.toolbar.$n -style Toolbutton \
+	      -image $image -takefocus 0 \
 	      -command [list [namespace which my] Button[string totitle $n]]
 	    pack $w.toolbar.$n -side left
 	}
 	pack $toolbar.dir -fill x -expand 1 -padx 2
 	grid $toolbar -sticky news -padx 2
 	grid [ttk::separator $w.sep] -padx 0 -pady 2 -sticky ew
-	variable dirlist [dirlist $w.list -width 400 \
-	  -title Folder]
+	variable dirlist [dirlist $w.list -width 400 -title [mc Folder]]
 	grid $w.list -sticky news -padx 4 -pady 2
 	grid columnconfigure $w all -weight 1
 	grid rowconfigure $w $w.list -weight 1
@@ -1600,10 +1778,15 @@ auto_load tk::IconList
 	if {$options(-title) ne ""} {
 	    wm title $w $options(-title)
 	} else {
-	    wm title $w "Choose Directory"
+	    wm title $w [mc "Choose Directory"]
 	}
-	set cwd [file normalize [file join . $options(-initialdir)]]
+	set cwd [if {[file isdirectory $options(-initialdir)]} {
+	    file normalize $options(-initialdir)
+	} else {
+	    pwd
+	}]
 	$dirlist set $cwd
+	$dirlist open $cwd
 	$dirbox set [file nativename $cwd]
 	$dirbox icursor end
 	$dirbox xview moveto 1
@@ -1617,30 +1800,52 @@ auto_load tk::IconList
 	  [namespace code {my ChangeDir [%W get]}]
 	bind $dirlist <<ListboxSelect>> \
 	  [namespace code {my ChangeDir [%W get]}]
+	bind $dirlist <<DirectorySelect>> [list $w.buttonbar.ok invoke]
+
+	bind $w <Alt-Home> [list $w.toolbar.home invoke]
+	bind $w <F5> [list $w.toolbar.reload invoke]
+	bind $w <Alt-n> [list $w.toolbar.newfolder invoke]
+	bind $w <Return> [list $w.buttonbar.ok invoke]
+	bind $w <Escape> [list $w.buttonbar.cancel invoke]
+
+	focus $w.toolbar.dir
     }
 
-    method GlobEscape {str} {
-	set map {\\ \\\\ ? \\? * \\* [ \\[ ] \\] \{ \\\{ \} \\\}}
-	return [string map $map $str]
+    method IdleCallback {method args} {
+	my variable afteridle
+	after cancel $afteridle
+	set afteridle [after idle [list [namespace which my] $method {*}$args]]
     }
 
     method DirMatchCommand {str} {
-	set str [file normalize $str]
-	if {[string index $str 0] ni {{} ~} } {
-	    set esc [my GlobEscape $str]
-	    set list [lsort -dictionary [glob -nocomplain -types d -- $esc*]]
-	    return [lmap n $list {file nativename $n}]
+	my variable cwd
+	if {[string index $str 0] ne "~" \
+	  || [file exists [lindex [file split $str] 0]]} {
+	    set path [reduce [file join $cwd $str]]
+	} else {
+	    set path [reduce [file join $cwd ./$str]]
 	}
+	if {[string index $str end] eq "/"} {
+	    set dir $path
+	    append path /
+	} else {
+	    set dir [file dirname $path]
+	}
+	set list [if {[file readable $dir]} {
+	    lsort -dictionary [ttk::fsdialog::globall $path d]
+	}]
+	return [lmap n $list {file nativename $n}]
     }
 
     method ChangeDir {dir} {
 	my variable cwd dirlist dirbox
 	try {
-	    set path [file join $cwd [file normalize $dir]]
+	    set path [reduce [joinfile $cwd $dir]]
 	    set dir [file nativename $path]
+	    $dirbox selection clear
 	    if {$path ne $cwd} {
-		$dirlist set $path
 		set cwd $path
+		$dirlist set $path
 	    } else {
 		$dirbox set $dir
 		$dirbox icursor end
@@ -1649,7 +1854,7 @@ auto_load tk::IconList
 	    }
 	} trap POSIX {- err} {
 	    posixerror $dirlist [dict get $err -errorcode] \
-	      {Cannot change to the directory "%s"} $dir
+	      {Cannot change to the directory "%s"} [file nativename $dir]
 	}
 	return $cwd
     }
@@ -1723,6 +1928,11 @@ auto_load tk::IconList
 	geometry dirdialog geometry $geometry
 	my destroy
     }
+
+    method cget option {
+	if {$option eq "-takefocus"} {return 0}
+	return [next $option]
+    }
 }
 
 ::tk::Megawidget create ::ttk::fsdialog::getSaveFile \
@@ -1755,6 +1965,7 @@ auto_load tk::IconList
 	# means the hull widget should never be a toplevel, because a toplevel
 	# widget receives <Destroy> events for all of its children.
 	place [set hull [ttk::frame $w.bg]] -relwidth 1 -relheight 1
+	bind $hull <<ThemeChanged>> [list [namespace which my] ThemeInit]
 	wm protocol $w WM_DELETE_WINDOW [list [namespace which my] Cancel]
     }
 
@@ -1764,8 +1975,14 @@ auto_load tk::IconList
 	array set pref [dict get [readcfg] prefs]
 	namespace upvar ::tk Priv img
 
+	my ThemeInit
 	set geometry [geometry filedialog]
-	wm geometry $w [dict get $geometry geometry]
+	# on Android, use a full screen dialog
+	if {[info exists ::tk::android] && $::tk::android} {
+	    wm attributes $w -fullscreen 1
+	} else {
+	    wm geometry $w [dict get $geometry geometry]
+	}
 
 	# Build the toolbar
 	variable toolbar [ttk::frame $w.toolbar]
@@ -1774,12 +1991,13 @@ auto_load tk::IconList
 	    if {[info exists img(${n}DimImage)]} {
 		lappend image disabled $img(${n}DimImage)
 	    }
-	    ttk::button $w.toolbar.$n -style Toolbutton -image $image \
+	    ttk::button $w.toolbar.$n -style Toolbutton \
+	      -image $image -takefocus 0 \
 	      -command [list [namespace which my] Button[string totitle $n]]
 	    pack $w.toolbar.$n -side left
 	}
 	ttk::menubutton $w.toolbar.options -style Toolbutton \
-	  -image [list $img(optionsmenuImage)]
+	  -image [list $img(optionsmenuImage)] -takefocus 0
 	$w.toolbar.options configure \
 	  -menu [menu $w.toolbar.options.menu -tearoff 0]
 	$w.toolbar.options.menu add cascade -label " [mc Sorting]" \
@@ -1802,11 +2020,15 @@ auto_load tk::IconList
 	  -selectimage ::ttk::fsdialog::check16 \
 	  -variable [my varname pref(hidden)] \
 	  -command [list [namespace which my] Reconfigure]
+	bind $w <Alt-period> [list $w.toolbar.options.menu invoke \
+	  [$w.toolbar.options.menu index end]]
 	$w.toolbar.options.menu add checkbutton -label [mc "Separate Folders"] \
 	  -compound left -image ::ttk::fsdialog::blank16 -indicatoron 0 \
 	  -selectimage ::ttk::fsdialog::check16 \
 	  -variable [my varname pref(duopane)] \
 	  -command [list [namespace which my] Layout]
+	bind $w <F7> [list $w.toolbar.options.menu invoke \
+	  [$w.toolbar.options.menu index end]]
 	$w.toolbar.options.menu.sort add radiobutton -label [mc "By Name"] \
 	  -compound left -image ::ttk::fsdialog::blank16 -indicatoron 0 \
 	  -selectimage ::ttk::fsdialog::radio16 \
@@ -1905,18 +2127,23 @@ auto_load tk::IconList
 	}
 	$w.openbutton configure -text [mc $action]
 
-	set cwd [file normalize $options(-initialdir)]
-	if {![file isdirectory $cwd]} {set cwd [pwd]}
+	set cwd [if {[file isdirectory $options(-initialdir)]} {
+	    file normalize $options(-initialdir)
+	} else {
+	    pwd
+	}]
 	$w.fnent set $options(-initialfile)
 	my SelectFilter $w.ftent
 	my Reconfigure
 	variable trail [list $cwd] pos 0
 	my TrailPos $pos
+	$dirlist open $cwd
 
 	# Bindings
-	bind $w.fnent <Return> [list $w.openbutton invoke]
 	bind $w.fnent <<MatchSelected>> \
 	  [list [namespace which my] SelectFile %W]
+	bind $w.fnent <<MismatchSelected>> \
+	  [list $w.openbutton invoke]
 	bind $w.ftent <<MatchSelected>> \
 	  [list [namespace which my] SelectFilter %W]
 	bind $w.ftent <<MismatchSelected>> \
@@ -1932,11 +2159,26 @@ auto_load tk::IconList
 	bind $dirlist <<ListboxSelect>> \
 	  [namespace code {my ChangeDir [%W get]}]
 	bind $w.filearea.files <<ListboxSelect>> \
-	  [list after idle [list [namespace which my] ListBrowse 1]]
+	  [list [namespace which my] IdleCallback ListBrowse 1]
+	bind $w.filearea.files <<DirectorySelect>> \
+	  [namespace code {my ChangeDir [lindex [%W selection] 0]}]
 	bind $w.filearea.details <<ListboxSelect>> \
 	  [list [namespace which my] ListBrowse 2]
 	bind $w.filearea.details <<FileListSort>> \
 	  [list [namespace which my] UpdateSortPrefs %W]
+	bind $w.filearea.details <<DirectorySelect>> \
+	  [namespace code {my ChangeDir [lindex [%W selection] 0]}]
+
+	bind $w <Alt-Up> [list $w.toolbar.up invoke]
+	bind $w <Alt-Left> [list $w.toolbar.prev invoke]
+	bind $w <Alt-Right> [list $w.toolbar.next invoke]
+	bind $w <Alt-Home> [list $w.toolbar.home invoke]
+	bind $w <F5> [list $w.toolbar.reload invoke]
+	bind $w <Alt-n> [list $w.toolbar.newfolder invoke]
+	bind $w <F10> [list event generate $w.toolbar.options <<Invoke>>]
+	bind $w <Escape> [list $w.cancbutton invoke]
+
+	focus $w.fnent
     }
 
     method ListBrowse {args} {
@@ -1945,11 +2187,8 @@ auto_load tk::IconList
 	if {[llength $list] != 1} return
 	set file [lindex $list 0]
 	set path [joinfile $cwd $file]
-	if {[file isdirectory $path]} {
-	    my ChangeDir $path
-	} else {
-	    set text $file
-	}
+	$w.fnent selection clear
+	set text $file
     }
 
     method ButtonUp {} {
@@ -2009,7 +2248,7 @@ auto_load tk::IconList
     method TrailPos {index} {
 	my variable cwd trail pos toolbar dirbox dirlist
 	set pos $index
-	$dirlist set [lindex $trail $pos]
+	catch {$dirlist set [lindex $trail $pos]}
 	set cwd [$dirlist get]
 	$dirbox set [file nativename $cwd]
 	$dirbox icursor end
@@ -2036,7 +2275,7 @@ auto_load tk::IconList
     method ReloadDir {} {
 	my variable w filelist cwd types
 	try {
-	    next
+	    catch {next}
 	    set type [$w.ftent current]
 	    if {$type < 0} {
 		set pat [$w.ftent get]
@@ -2047,7 +2286,7 @@ auto_load tk::IconList
 	    my FileValidate [$w.fnent get]
 	} trap POSIX {- err} {
 	    posixerror $w [dict get $err -errorcode] \
-	      {Cannot change to the directory "%s"} $cwd
+	      {Cannot change to the directory "%s"} [file nativename $cwd]
 	}
     }
 
@@ -2102,22 +2341,23 @@ auto_load tk::IconList
     method FileMatchCommand {str} {
 	my variable cwd
 	if {$str eq ""} return
-	set esc [my GlobEscape $str]
 	if {[file pathtype $str] eq "relative" || [string index $str 0] eq "~"} {
 	    set l [expr {[string length $cwd] + 1}]
-	    set list [lmap n [glob -nocomplain -dir $cwd -- $esc*] {
-		string range $n $l end
-	    }]
+	    set str $cwd/$str
 	} else {
-	    set list [glob -nocomplain -- $esc*]
+	    set l 0
 	}
+	# Add a dot to correctly handle strings with a trailing '/'
+	set dir [file dirname $str.]
+	set list [if {[file readable $dir]} {
+	    lmap n [ttk::fsdialog::globall $str] {string range $n $l end}
+	}]
 	return [lsort -dictionary $list]
     }
 
     method FileValidate {str} {
 	my variable cwd filelist
-	if {$str ne "" && [file isfile [set file [joinfile $cwd $str]]]} {
-	    set file [file normalize $file]
+	if {$str ne "" && [file isfile [joinfile $cwd $str]]} {
 	    $filelist selection set [list $str]
 	    $filelist see $str
 	} else {
@@ -2131,6 +2371,27 @@ auto_load tk::IconList
 	set pref(sort) [$w cget -sortkey]
 	set pref(reverse) [$w cget -reverse]
 	preferences {*}[array get pref]
+    }
+
+    method ThemeInit {} {
+	set font [ttk::style lookup FSDialog.Treeview -font {} TkDefaultFont]
+	ttk::style configure FSDialog.Treeview \
+	  -rowheight [expr {[font metrics $font -linespace] + 2}]
+    }
+
+    method Extension {} {
+	my variable w
+	set type [$w.ftent current]
+	if {$type < 0} {
+	    set extension [file extension [$w.ftent get]]
+	} else {
+	    set extension [file extension [lindex $options(-filetypes) $type 1 0]]
+	}
+	if {$extension ne ""} {
+	    return $extension
+	} else {
+	    return $options(-defaultextension)
+	}
     }
 
     method Result {value {multiple 0}} {
@@ -2163,10 +2424,13 @@ auto_load tk::IconList
 	global answer
 	my variable w options cwd text
 	if {$text eq ""} return
-	set file [file normalize [joinfile $cwd $text]]
+	set file [ttk::fsdialog::reduce [joinfile $cwd $text]]
+	if {[file extension $file] eq ""} {
+	    append file [my Extension]
+	}
 	if {[file isdirectory $file]} {
-	    my ChangeDir $file
 	    $w.fnent set ""
+	    my ChangeDir $file
 	} else {
 	    if {$options(-confirmoverwrite)} {
 		if {[file exists $file]} {
@@ -2182,6 +2446,11 @@ auto_load tk::IconList
 	    }
 	    my Result $file
 	}
+    }
+
+    method cget option {
+	if {$option eq "-takefocus"} {return 0}
+	return [next $option]
     }
 }
 
@@ -2257,7 +2526,7 @@ auto_load tk::IconList
 	if {$options(-multiple)} {
 	    my variable w cwd text
 	    set text [lmap n [my FileSplit $text] {
-		set file [file normalize [joinfile $cwd $n]]
+		set file [ttk::fsdialog::reduce [joinfile $cwd $n]]
 		if {[file exists $file]} {
 		    set file
 		} else {
@@ -2285,9 +2554,11 @@ auto_load tk::IconList
 	if {$options(-multiple)} {
 	    set files [my FileSplit $text]
 	    if {[llength $files] == 0} return
+	    set ext [my Extension]
 	    set missing {}
 	    set list [lmap s $files {
-		set file [file normalize [joinfile $dir $s]]
+		set file [ttk::fsdialog::reduce [joinfile $dir $s]]
+		if {[file extension $file] eq ""} {append file $ext}
 		if {![file exists $file]} {
 		    lappend missing [mc {File "%s" does not exist.} \
 		      [file nativename $file]]
@@ -2305,18 +2576,21 @@ auto_load tk::IconList
 		my Result $list 1
 	    }
 	} elseif {$text ne ""} {
-	    set file [file normalize [joinfile $dir $text]]
+	    set file [ttk::fsdialog::reduce [joinfile $dir $text]]
 	    if {[file isdirectory $file]} {
-		my ChangeDir $file
 		$w.fnent set ""
-	    } elseif {[file exists $file]} {
-		my Result $file
+		my ChangeDir $file
 	    } else {
-		$w.fnent set $text
-		protect $w {
-		    tk_messageBox -type ok -icon warning -parent $w \
-		      -message [mc {File "%s" does not exist.} \
-		      [file nativename $file]]
+		if {[file extension $file] eq ""} {append file [my Extension]}
+		if {[file exists $file]} {
+		    my Result $file
+		} else {
+		    $w.fnent set $text
+		    protect $w {
+			tk_messageBox -type ok -icon warning -parent $w \
+			  -message [mc {File "%s" does not exist.} \
+			  [file nativename $file]]
+		    }
 		}
 	    }
 	}
@@ -2325,4 +2599,4 @@ auto_load tk::IconList
 
 namespace import -force ::ttk::fsdialog::*
 
-package provide fsdialog 2.0
+package provide fsdialog 2.1
