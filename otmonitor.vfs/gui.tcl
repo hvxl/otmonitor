@@ -1976,10 +1976,10 @@ proc gui::hexfile {} {
     set dir [file dirname [append cfg(firmware,hexfile) ""]]
     set name [file tail $cfg(firmware,hexfile)]
     set types {
-        {"Firmware files"       {.cof .cod .hex}}
+        {"Firmware files"       {.hex .cof .cod}}
         {"All files"            *}
     }
-    set name [tk_getOpenFile -filetypes $types -defaultextension .cof \
+    set name [tk_getOpenFile -filetypes $types -defaultextension .hex \
       -initialdir $dir -initialfile $name -parent .fw \
       -title "Choose firmware file"]
     if {$name ne ""} {
