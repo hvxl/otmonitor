@@ -15,11 +15,11 @@
 % set xfer disabled
 % if {[dict exists $state request post hexdata]} {
 %   set hexdata [dict get $state request post hexdata {}]
-%   lassign [upgrade parsehex [string map [list \r\n \n] $hexdata]] rc arg
+%   lassign [upgrade parsefw [string map [list \r\n \n] $hexdata]] rc arg
 %   if {$rc eq "success"} {
-%     global csize dsize
-%     set cpct [expr {100 * $csize / 4096}]
-%     set dpct [expr {100 * $dsize / 256}]
+%     global csize dsize pic
+%     set cpct [expr {100 * $csize / [dict get $pic codesize]}]
+%     set dpct [expr {100 * $dsize / [dict get $pic datasize]}]
 %     set prog enabled
 %     if {$arg} {set xfer enabled}
 %     set status "Click 'Program' to download the firmware"

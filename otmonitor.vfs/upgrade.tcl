@@ -1,5 +1,5 @@
 namespace eval upgrade {
-    namespace ensemble create -subcommands {readfw loadfw}
+    namespace ensemble create -subcommands {readfw parsefw loadfw}
 }
 
 proc upgrade::readfw {file} {
@@ -35,6 +35,19 @@ proc upgrade::readfw {file} {
 	    default {parsehex $data}
 	}
 	process
+    } on error err {
+	return [list failed "Invalid firmware file: $err"]
+    }
+}
+
+# Used by the web GUI
+proc upgrade::parsefw {hexdata} {
+    global csize dsize
+    set csize 0
+    set dsize 0
+    try {
+	parsehex $hexdata
+	return [process]
     } on error err {
 	return [list failed "Invalid firmware file: $err"]
     }

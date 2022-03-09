@@ -1,5 +1,5 @@
 % global voltref setback midbit overridehb
-% variable vreffmt [format %.3f [expr {([get voltref 3] + 3) * 5 / 24.}]]
+% variable vreffmt [format %.3f [expr {voltage([get voltref 3])}]]
 <html>
 <head>
 <link rel="stylesheet" type="text/css" href="config.css">
@@ -17,8 +17,12 @@ var learn = \["VR", "IT", "SB", "OH"\];
 function vref(w) {
     var e = document.getElementById("vrefstr");
     if (e) {
+% if {[cpu] in {16f628 16f88}} {
         var v = (parseInt(w.value) + 3) * 5 / 24 + 0.0005;
-	e.value = v.toString().substr(0, 5);
+% } else {
+        var v = (2 * parseInt(w.value) + 13) * 2.048 / 32 + 0.0005;
+% }
+        e.value = v.toString().substr(0, 5);
     }
 }
 </script>
