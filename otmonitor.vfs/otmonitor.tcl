@@ -3,7 +3,7 @@
 # Opentherm monitor utility.
 # For more information, see http://otgw.tclcode.com/otmonitor.html
 
-set version 6.0
+set version 6.1
 set reportflags 0
 set appendlog 0
 set setpt 20.00
@@ -762,7 +762,12 @@ proc untab {str args} {
     set parts [lassign [split $str \t] rc]
     set tabs [lrange $args 0 [expr {[llength $parts] - 1}]]
     foreach s $parts n $tabs {
-	append rc [string repeat " " [expr {$n - [string length $rc]}]] $s
+	if {$n ne ""} {
+	    set cnt [expr {$n - [string length $rc]}]
+	} else {
+	    set cnt [expr {8 - [string length $rc] % 8}]
+	}
+	append rc [string repeat " " $cnt] $s
     }
     return $rc
 }

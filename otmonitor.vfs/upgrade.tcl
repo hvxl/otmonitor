@@ -655,7 +655,7 @@ proc upgrade::eeprom {version} {
 	4.0a9 4.0a9.1 4.0a10 4.0a11 4.0a11.1 4.0a11.2 4.0a12
     }
     if {$version == 0 || \
-      $version ni $supported && ![package vsatisfies $version 4.0b0-6.1]} {
+      $version ni $supported && ![package vsatisfies $version 4.0b0-6.2]} {
 	return {}
     }
     set rc {
