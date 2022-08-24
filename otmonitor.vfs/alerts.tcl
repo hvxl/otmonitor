@@ -193,7 +193,7 @@ proc alert::email {message} {
     lappend msg "Date: [smtpdate [clock seconds]]"
     lappend msg "" $message
     # Connect to the SMTP server
-    set fd [socket -async $cfg(email,server) $cfg(email,port)]
+    set fd [[socketcommand] -async $cfg(email,server) $cfg(email,port)]
     # Clean up if the coroutine gets deleted somehow
     set trace [list apply {
 	{fd old new op} {
@@ -203,8 +203,6 @@ proc alert::email {message} {
     } $fd]
     trace add command [info coroutine] delete $trace
     try {
-	# Make sure the tls library is loaded if it will be needed
-	if {$cfg(email,secure) in {TLS SSL}} {package require tls}
 	fileevent $fd writable [info coroutine]
 	# Wait for the connection
 	yield
@@ -215,7 +213,7 @@ proc alert::email {message} {
 	fconfigure $fd -blocking 0 -translation crlf -buffering line
 	# Switch on encryption for SSL connections
 	if {$cfg(email,secure) eq "SSL"} {
-	    tls::import $fd
+	    set fd [starttls $fd -servername $cfg(email,server)]
 	    fconfigure $fd -translation crlf -buffering line
 	    # Hack that seems to be necessary for ssl to work
 	    # We need to send something before the readable event will fire
@@ -232,7 +230,7 @@ proc alert::email {message} {
 	    if {$status eq "502"} {
 		throw {SMTP TLS} "server does not support TLS"
 	    }
-	    tls::import $fd
+	    set fd [starttls $fd -servername $cfg(email,server)]
 	    fconfigure $fd -translation crlf -buffering line
 	    smtpputs $fd "EHLO [lindex [fconfigure $fd -sockname] 1]"
 	    set data [lassign [smtpread $fd 250 2XX] status]
@@ -335,8 +333,7 @@ proc alert::sms {message} {
     log append "Sending SMS via $cfg(sms,provider)"
     package require http
     if {[string match https://* $url]} {
-	package require tls
-	http::register https 443 tls::socket
+	http::register https 443 [socketcommand 1]
     }
     # Determine content type
     if {[dict exists $dict type]} {
@@ -424,7 +421,7 @@ proc alert::sms {message} {
 		switch -- [dict get $meta $ctype] {
 		    text/xml		{set format xml}
 		    text/plain		{set format raw}
-		    application/json	{set fromat json}
+		    application/json	{set format json}
 		}
 	    }
 	    switch -- $format {
@@ -438,7 +435,10 @@ proc alert::sms {message} {
 		    set result $data
 		}
 		json {
-		    # Not yet implemented
+		    package require tdom 0.9.3-
+		    dom parse -json $data doc
+		    set xpath [dict get $dict result xpath]
+		    set result [$doc selectNodes $xpath]
 		}
 	    }
 	    if {[dict exists $dict result success]} {
@@ -474,21 +474,24 @@ proc alert::providers {} {
 }
 
 proc alert::test {type {w .}} {
-    log append "[ts] Generating a test message"
+    log append "Generating a test message"
     set message "Opentherm gateway test message"
     switch -- $type {
 	email {
 	    if {![catch {email $message} result]} {
 		set result "Message was sent successfully"
+		log append $result
 	    }
 	}
 	sms {
 	    if {![catch {sms $message} result]} {
 		set result "Message was sent successfully"
+		log append $result
 	    }
 	}
 	default {
 	    set result "Unknown test type: $type"
+	    log append $result
 	}
     }
     if {[winfo exists $w]} {

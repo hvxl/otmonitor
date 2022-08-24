@@ -1,10 +1,21 @@
+<!DOCTYPE html>
 <html>
 <head>
-<title>
-</title>
+<meta charset="utf-8">
+<!-- No favicon -->
+<link rel="icon" href="about:blank">
+<title>OTMonitor configuration</title>
 <style>
+html {
+  height: 100%;
+}
 body {
+  height: calc(100% - 20pt);
+  display: flex;
   background: #efefef;
+  margin: 10pt;
+  align-content: stretch;
+  gap: 12pt;
 }
 label {
   display: inline-block;
@@ -22,12 +33,9 @@ img {
   margin: 2px 4px;
 }
 .menu {
-  float: left;
-  width: 18%;
-  margin: 1%;
   background: white;
-  height: 98%;
   border: solid 1px;
+  width: 175pt;
 }
 .content {
   float:left;
@@ -36,7 +44,6 @@ img {
 }
 iframe {
   width: 100%;
-  height: 98%;
   border: solid 1px;
 }
 </style>
@@ -116,9 +123,6 @@ function show(url) {
 <span>ThingSpeak</span>
 </label>
 </div>
-<div class="content">
-<iframe id="area" src="cfgthermostat.html">
-</iframe>
-</div>
+<iframe id="area" src="cfgthermostat.html"></iframe>
 </body>
 </html>

@@ -6,13 +6,16 @@
 #	org.freedesktop.DBus.Introspectable
 #	org.freedesktop.DBus.Properties
 
-package require dbus 2.1
-package provide dbif 1.2
-package provide dbus-intf 1.2
+package require dbus 3.0
+package provide dbif 2.1
+package provide dbus-intf 2.1
 
 namespace eval dbus::dbif {
     # Setup some defaults in case the user doesn't specify certain options
     variable defaults [dict create bus session intf com.tclcode.default]
+
+    # Mapping of bus names to dbus handles
+    variable handle {}
 
     # Store a copy of the message info of the last received message so it
     # won't be necessary to pass it around all the time
@@ -33,13 +36,12 @@ namespace eval dbus::dbif {
     variable trace 1
     # PropertiesChanged signal definition to be reused for every path/intf
     set signal(PropertiesChanged) {
-	bus ""
+	dbus ""
 	path ""
 	interface org.freedesktop.DBus.Properties
 	name PropertiesChanged
 	signature sa{sv}as
 	command ::dbus::dbif::propchanged
-	interp {}
 	meta {}
 	args {
 	    interface_name s
@@ -54,10 +56,15 @@ namespace eval dbus::dbif {
     # Expiry time for messages waiting for a response
     variable timeout 25000
 
+    # Introspection
+    variable dtd [format "<!DOCTYPE node PUBLIC %s\n%s>" \
+      {"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"} \
+      {"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd"}]
+
     # Create the dbif ensemble command
     namespace ensemble create -command ::dbif -subcommands {
 	default connect method signal property generate listen \
-	  return error get delete
+	  return error get delete pave
     } -map {return {respond return} error {respond error}}
 }
 
@@ -67,7 +74,7 @@ namespace eval dbus::dbif {
 
 # Procedure for returning error messages to the caller
 #
-proc dbus::dbif::dbuserr {type bus args} {
+proc dbus::dbif::dbuserr {type dbus args} {
     upvar #1 data data
     if {[dict get $data noreply]} {return -level [info level] -async 1}
     set error org.freedesktop.DBus.Error.Failed
@@ -92,7 +99,7 @@ proc dbus::dbif::dbuserr {type bus args} {
 	    lassign $args path intf name
 	    set msg "No such property '$name' in interface '$intf'\
 	      at object path '$path'"
-	    set error org.freedesktop.DBus.Error.InvalidArgs
+	    set error org.freedesktop.DBus.Error.UnknownProperty
 	}
 	propunset {
 	    lassign $args path intf name
@@ -116,7 +123,7 @@ proc dbus::dbif::dbuserr {type bus args} {
 	    set msg "Invalid $type"
 	}
     }
-    dbus error $bus -name $error \
+    dbus error $dbus -name $error \
       [dict get $data sender] [dict get $data serial] $msg
     return -level [info level] -async 1
 }
@@ -124,10 +131,10 @@ proc dbus::dbif::dbuserr {type bus args} {
 # Make sure a new interface on a path has all the necessary parts so it
 # doesn't need to be checked every time.
 #
-proc dbus::dbif::create {bus path intf} {
+proc dbus::dbif::create {dbus path intf} {
     variable dbif
-    if {![info exists dbif($bus,$path,$intf)]} {
-	set dbif($bus,$path,$intf) \
+    if {![info exists dbif($dbus|$path|$intf)]} {
+	set dbif($dbus|$path|$intf) \
 	  [dict create methods {} signals {} properties {}]
     }
 }
@@ -149,16 +156,25 @@ proc dbus::dbif::args {list {thing Argument}} {
 
 # Define a method that can be called over the DBus
 #
-proc dbus::dbif::define {bus path intf name cmd int {in {}} {out {}} {meta {}} {async 0}} {
+proc dbus::dbif::define \
+  {dbus path intf name cmd {in {}} {out {}} {meta {}} {async 0}} {
     variable dbif
-    create $bus $path $intf
+    create $dbus $path $intf
     set args [args $in]
     dict update args signature sig args inargs {}
     set args [args $out]
     dict update args signature ret args outargs {}
-    set dict [dict create command $cmd interp $int signature $ret \
+    set dict [dict create command $cmd signature $ret \
       in $inargs out $outargs meta $meta async $async]
-    dict set dbif($bus,$path,$intf) methods $name,$sig $dict
+    dict set dbif($dbus|$path|$intf) methods $name,$sig $dict
+}
+
+proc dbus::dbif::undefine {dbus path intf name cmd {in {}}} {
+    variable dbif
+    if {![info exists dbif($dbus|$path|$intf)]} return
+    set args [args $in]
+    dict update args signature sig args inargs {}
+    dict unset dbif($dbus|$path|$intf) methods $name,$sig
 }
 
 # Release the information stored for a message
@@ -244,17 +260,10 @@ proc dbus::dbif::cmdline {optvar argvar argspec arglist body} {
 
 # Get the namespace of the caller
 #
-proc dbus::dbif::getns {interp} {
-    if {$interp eq ""} {
-	# This is a helper procedure. So 1 level up is the actual procedure
-	# We need to go 2 levels up for the caller of the actual procedure
-	return [uplevel 2 [list namespace current]]
-    } else {
-	# If the command is in another interpreter, we probably arived here
-	# through an interp alias. In that case the calling context of that
-	# interp is accessible via interp eval
-	return [interp eval $interp [list namespace current]]
-    }
+proc dbus::dbif::getns {} {
+    # This is a helper procedure. So 1 level up is the actual procedure
+    # We need to go 2 levels up for the caller of the actual procedure
+    return [uplevel 2 [list namespace current]]
 }
 
 # Access the miscellaneous information of a message
@@ -279,6 +288,7 @@ proc dbus::dbif::namecheck {name {thing Name}} {
 
 proc dbus::dbif::buscheck {name} {
     if {$name in {session system starter}} {return $name}
+    if {[regexp {^dbus\d+$} $name]} {return $name}
     if {[regexp {^[a-z]+:([0-9A-Za-z_/.\\,=-]|%[0-9a-fA-F]{2})+$} $name]} {
 	set spec [lassign [split $name :,] transport]
 	if {[lsearch -not $spec *=*] < 0 && [lsearch $spec *=*=*] < 0} {
@@ -311,14 +321,27 @@ proc dbus::dbif::metacheck {data} {
     error "Invalid attribute specification. Must be a dict"
 }
 
+proc dbus::dbif::handle {name} {
+    variable handle
+    if {[dict exists $handle $name]} {
+	return [dict get $handle $name]
+    } elseif {![catch {dbus info $name name}]} {
+	# Appears to be a valid dbus handle
+	dict set handle $name $name
+	return $name
+    } else {
+	return -code error "not connected"
+    }
+}
+
 proc dbus::dbif::async {opts} {
     return [expr {[dict exists $opts -async] && \
       [string is true -strict [dict get $opts -async]]}]
 }
 
-proc dbus::dbif::vartrace {op bus path intf name} {
+proc dbus::dbif::vartrace {op dbus path intf name} {
     variable dbif; variable trace
-    dict with dbif($bus,$path,$intf) properties $name {
+    dict with dbif($dbus|$path|$intf) properties $name {
 	if {[dict exists $meta Property.EmitsChangedSignal]} {
 	    set ecs [dict get $meta Property.EmitsChangedSignal]
 	} else {
@@ -330,9 +353,9 @@ proc dbus::dbif::vartrace {op bus path intf name} {
 	    if {$ecs ni {true invalidates}} return
 	}
 	set inv [expr {$ecs eq "invalidates"}]
-	set trc [list dbus::dbif::propchg $bus $path $intf $name $inv]
+	set trc [list dbus::dbif::propchg $dbus $path $intf $name $inv]
 	set cmd [list trace $op variable $variable {write unset} $trc]
-	interp eval $interp [list uplevel #0 $cmd]
+	uplevel #0 $cmd
     }
     return
 }
@@ -345,18 +368,57 @@ proc dbus::dbif::changedsignal {state} {
     set op [lindex {remove add} $trace]
     variable dbif
     foreach n [array names dbif] {
-	lassign [split $n ,] bus path intf
+	lassign [split $n |] dbus path intf
 	foreach name [dict keys [dict get $dbif($n) properties]] {
-	    vartrace $op $bus $path $intf $name
+	    vartrace $op $dbus $path $intf $name
 	}
     }
+}
+
+# Determine the number of arguments from signatures
+proc dbus::dbif::argcount {argspec} {
+    set cnt 0
+    dict for {name sig} $argspec {
+	if {![dbus validate signature $sig]} {return -1}
+	while {$sig ne ""} {
+	    switch [string index $sig 0] {
+		s - b - y - n - q - i - u - x - t - d - g - o {
+		    set sig [string range $sig 1 end]
+		}
+		a {
+		    set sig [string range $sig 1 end]
+		    continue
+		}
+		( {
+		    set x 0
+		    while {$x >= 0} {
+			set x [string first ) $sig [incr x]]
+			set str [string range $sig 0 $x]
+			if {[dbus validate signature $str]} break
+		    }
+		    set sig [string range $sig [incr x] end]
+		}
+		\{ {
+		    set x 0
+		    while {$x >= 0} {
+			set x [string first \} $sig [incr x]]
+			set str [string range $sig 0 $x]
+			if {[dbus validate signature a$str]} break
+		    }
+		    set sig [string range $sig [incr x] end]
+		}
+	    }
+	    incr cnt
+	}
+    }
+    return $cnt
 }
 
 ########################################################################
 # Ensemble subcommands
 ########################################################################
 
-# Select which DBus to use (session or system)
+# Select which DBus and interface to use
 #
 proc dbus::dbif::default {args} {
     variable defaults
@@ -376,37 +438,45 @@ proc dbus::dbif::default {args} {
 #
 proc dbus::dbif::connect {args} {
     variable defaults
+    variable handle
     set bus [dict get $defaults bus]; set opts {}
     cmdline opt arg args $args {
 	-bus: {set bus [buscheck $arg]}
 	-yield - -replace - -noqueue {lappend opts $opt}
     }
-    dbus connect $bus
+    if {[dict exists $handle $bus]} {
+	set dbus [dict get $handle $bus]
+    } elseif {[regexp {^dbus\d+$} $bus]} {
+	set dbus $bus
+    } else {
+	set dbus [dbus connect $bus]
+	dict set handle $bus $dbus
+    }
     set rc {}; foreach name $args {
-    	if {![catch {dbus name $bus {*}$opts $name}]} {
+    	if {![catch {dbus name $dbus {*}$opts $name}]} {
 	    lappend rc $name
 	}
     }
-    if {[dict get $defaults intf] eq "com.tclcode.default" && [llength $args]} {
-	dict set defaults intf [lindex $args 0]
+    if {[dict get $defaults intf] eq "com.tclcode.default"} {
+	if {[llength $rc]} {dict set defaults intf [lindex $rc 0]}
 	# Path of least surprise. If no defaults have been set up, users will
 	# probably expect the bus used for connecting will be the default
-	dict set defaults bus $bus
+	dict set defaults bus $dbus
     }
-    dbus method $bus {} org.freedesktop.DBus.Peer.Ping dbus::dbif::ping
-    dbus method $bus {} org.freedesktop.DBus.Peer.GetMachineId \
-      [list dbus::dbif::machineid $bus]
-    dbus method $bus {} org.freedesktop.DBus.Introspectable.Introspect \
-      [list dbus::dbif::introspect $bus]
-    dbus method $bus -details {} org.freedesktop.DBus.Properties.Set \
-      [list dbus::dbif::propset $bus]
-    dbus method $bus {} org.freedesktop.DBus.Properties.Get \
-      [list dbus::dbif::propget $bus]
-    dbus method $bus {} org.freedesktop.DBus.Properties.GetAll \
-      [list dbus::dbif::propdump $bus]
+    dbus method $dbus {} org.freedesktop.DBus.Peer.Ping dbus::dbif::ping
+    dbus method $dbus {} org.freedesktop.DBus.Peer.GetMachineId \
+      [list dbus::dbif::machineid $dbus]
+    dbus method $dbus {} org.freedesktop.DBus.Introspectable.Introspect \
+      [list dbus::dbif::introspect $dbus]
+    dbus method $dbus -details {} org.freedesktop.DBus.Properties.Set \
+      [list dbus::dbif::propset $dbus]
+    dbus method $dbus {} org.freedesktop.DBus.Properties.Get \
+      [list dbus::dbif::propget $dbus]
+    dbus method $dbus {} org.freedesktop.DBus.Properties.GetAll \
+      [list dbus::dbif::propdump $dbus]
     # Add the standard interfaces to the API specification
-    standard $bus
-    return $rc
+    standard $dbus
+    return -bus $dbus $rc
 }
 
 # Define a signal that the application may send
@@ -415,33 +485,29 @@ proc dbus::dbif::signal {args} {
     variable defaults; variable dbif; variable signal; variable sigid
     dict with defaults {}; set meta {}
     set id ""
-    cmdline opt arg {path name {in {}} {opt {}} {arglist {}} {body {}}} $args {
+    cmdline opt arg {path name {in {}} {arglist {}} {body {}}} $args {
 	-id: {set id $arg}
 	-bus: {set bus [buscheck $arg]}
 	-interface: {set intf [intfcheck $arg]}
 	-attributes: {set meta [metacheck $arg]}
     }
-    if {$body eq ""} {
-	set body $arglist
-	set arglist $opt
-	set interp ""
-    } else {
-	set interp $opt
-    }
-    namecheck $name
-    # Signals without a predefined path need a body to provide the path
-    if {$path ne "" || $body eq ""} {pathcheck $path}
-    create $bus $path $intf
-    if {$id eq ""} {set id signal[incr sigid]}
-    set dict [dict create \
-      bus $bus path $path interface $intf name $name command "" interp $interp]
-    if {$body ne ""} {
-	set ns [getns $interp]
-	dict set dict command [list apply [list $arglist $body $ns]]
+    set dbus [handle $bus]
+    if {$name ne ""} {
+	namecheck $name
+	# Signals without a predefined path need a body to provide the path
+	if {$path ne "" || $body eq ""} {pathcheck $path}
+	create $dbus $path $intf
+	if {$id eq ""} {set id signal[incr sigid]}
+	set dict [dict create dbus $dbus path $path \
+	  interface $intf name $name command ""]
+	if {$body ne ""} {
+	    set ns [getns]
+	    dict set dict command [list apply [list $arglist $body $ns]]
+	}
     }
     if {[info exists signal($id)]} {
 	# Clean up the old signal
-	dict update signal($id) bus obus path opath interface ointf {}
+	dict update signal($id) dbus obus path opath interface ointf {}
 	if {$obus eq ""} {
 	    # Internal signal present on all buses
 	    if {$id eq "PropertiesChanged"} {
@@ -450,9 +516,9 @@ proc dbus::dbif::signal {args} {
 		# The code may have messed with the path
 		set opath ""
 	    }
-	    set old [array names dbif *,$opath,$ointf]
+	    set old [array names dbif *|$opath|$ointf]
 	} else {
-	    set old [list $obus,$opath,$ointf]
+	    set old [list $obus|$opath|$ointf]
 	}
 	foreach o $old {
 	    set sigs [dict get $dbif($o) signals]
@@ -460,9 +526,13 @@ proc dbus::dbif::signal {args} {
 	      [lsearch -all -inline -exact -not $sigs $id]
 	}
     }
-    set signal($id) [dict merge $dict [args $in] [dict create meta $meta]]
-    dict lappend dbif($bus,$path,$intf) signals $id
-    return $id
+    if {$name ne ""} {
+	set signal($id) [dict merge $dict [args $in] [dict create meta $meta]]
+	dict lappend dbif($dbus|$path|$intf) signals $id
+	return $id
+    } else {
+	unset -nocomplain signal($id)
+    }
 }
 
 # Define a property that may be accessed through the DBus
@@ -470,56 +540,70 @@ proc dbus::dbif::signal {args} {
 proc dbus::dbif::property {args} {
     variable defaults; variable dbif
     dict with defaults {}; set op readwrite; set meta {}
-    cmdline opt arg {path name var args} $args {
+    cmdline opt arg {path name var {body ""}} $args {
 	-bus: {set bus [buscheck $arg]}
 	-interface: {set intf [intfcheck $arg]}
 	-access: {set op [accesscheck $arg]}
 	-attributes: {set meta [metacheck $arg]}
     }
-    if {[llength $args] <= 2} {
-	lassign [lreverse $args] body interp
-    } else {
-	set cmd {dbif property ?options? path name var ?interp ?body??}
-	error [format {wrong # args: should be "%s"} $cmd]
-    }
+    set dbus [handle $bus]
     set args [args [list $name] Property]
     set name [lindex [dict get $args args] 0]
     set sig [lindex [dict get $args signature] 0]
-    create $bus $path $intf
-
-    # Remove any old trace
-    if {[dict exists $dbif($bus,$path,$intf) properties $name]} {
-	vartrace remove $bus $path $intf $name
+    # Properties should be a single complete type, otherwise
+    # GetAll will produce invalid results
+    set cnt [argcount [list $name $sig]]
+    if {$cnt != 1} {
+	if {$cnt < 0} {
+	    return -code error [format {invalid signature: %s} $sig]
+	} else {
+	    return -code error [format {not a single complete type: %s} $sig]
+	}
     }
 
+    if {$var eq {}} {
+	if {![info exists dbif($dbus|$path|$intf)]} return
+    } else {
+	create $dbus $path $intf
+    }
+
+    # Remove any old trace
+    if {[dict exists $dbif($dbus|$path|$intf) properties $name]} {
+	vartrace remove $dbus $path $intf $name
+    }
+
+    if {$var eq {}} {
+	dict unset $dbif($dbus|$path|$intf) properties $name
+	return
+    }
+	
     if {$body ne ""} {
-	set ns [getns $interp]
-	set cmd [list apply [list $name $body $ns]]
+	set ns [getns]
+	set cmd [list apply [list [list msgid $name] $body $ns]]
     } else {
 	set cmd ""
     }
     set dict [dict create variable $var access $op signature $sig \
-      command $cmd interp $interp meta $meta]
-    dict set dbif($bus,$path,$intf) properties $name $dict
+      command $cmd meta $meta]
+    dict set dbif($dbus|$path|$intf) properties $name $dict
 
     # Setup a variable trace for readable properties
-    vartrace add $bus $path $intf $name
-    if {$interp ne {}} {
-	interp alias $interp ::dbus::dbif::propchg {} ::dbus::dbif::propchg
-    }
+    vartrace add $dbus $path $intf $name
 }
 
 # Define how to handle a method call
 #
 proc dbus::dbif::method {args} {
     variable defaults
-    dict with defaults {}; set meta {}; set async 0
-    cmdline opt arg {path cmd {in ""} {out ""} {interp ""} body} $args {
+    dict with defaults {}; set meta {}; set async 0; set opts {}
+    cmdline opt arg {path cmd {in ""} {out ""} body} $args {
         -bus: {set bus [buscheck $arg]}
         -interface: {set intf [intfcheck $arg]}
 	-attributes: {set meta [metacheck $arg]}
 	-async {set async 1}
+	-details {lappend opts -details}
     }
+    set dbus [handle $bus]
     namecheck $cmd
     set args {}
     set info {{}}
@@ -535,12 +619,19 @@ proc dbus::dbif::method {args} {
 	    lset info 0 [linsert [lindex $info 0] end $n]
 	}
     }
-    set ns [getns $interp]
-    set code [list apply [list [linsert $args 0 msgid] $body $ns]]
-    foreach n $info {
-	define $bus $path $intf $cmd $code $interp $n $out $meta $async
+    if {$body eq {}} {
+	foreach n $info {
+	    undefine $dbus $path $intf $cmd $n
+	}
+    } else {
+	set ns [getns]
+	set code [list apply [list [linsert $args 0 msgid] $body $ns]]
+	foreach n $info {
+	    define $dbus $path $intf $cmd $code $n $out $meta $async
+	}
+	dbus method $dbus {*}$opts \
+	  $path $intf.$cmd [list dbus::dbif::methods $dbus]
     }
-    dbus method $bus $path $intf.$cmd [list dbus::dbif::methods $bus]
 }
 
 # Generate a signal according to an earlier specification
@@ -551,13 +642,12 @@ proc dbus::dbif::generate {id args} {
 	error "Signal '$id' has not been defined"
     }
     set cmd [dict get $signal($id) command]
-    set int [dict get $signal($id) interp]
     if {$cmd eq ""} {
     	set argv $args
 	dict with signal($id) {}
     } else {
 	# Need to use catch to get the additional return options
-	if {[catch {interp eval $int [list uplevel #0 $cmd $args]} argv opts]} {
+	if {[catch {uplevel #0 $cmd $args} argv opts]} {
 	    # Rethrow any exceptions
 	    return -options $opts $argv
 	}
@@ -571,15 +661,12 @@ proc dbus::dbif::generate {id args} {
 	    }
 	}
 	# Don't expect the body to provide a list for single arg signals
-	# Check for a length of 2 because args contains name/signature pairs
-	if {[llength $args] == 2} {
-	    dbus signal $bus -signature $signature \
-	      $path $interface $name $argv
-	    return
-	}
+	if {[argcount $args] == 1} {set argv [list $argv]}
     }
-    dbus signal $bus -signature $signature \
-      $path $interface $name {*}$argv
+    if {[catch {dbus signal $dbus -signature $signature \
+      $path $interface $name {*}$argv} err opts]} {
+	return -code error $err
+    }
 }
 
 # Setup a signal handler for a specific signal
@@ -587,11 +674,12 @@ proc dbus::dbif::generate {id args} {
 proc dbus::dbif::listen {args} {
     variable defaults; variable hear
     dict with defaults {}
-    cmdline opt arg {path name {arglist ""} {interp ""} body} $args {
+    cmdline opt arg {path name {arglist ""} body} $args {
         -bus: {set bus [buscheck $arg]}
         -interface: {set intf [intfcheck $arg]}
     }
-    dbus filter $bus add \
+    set dbus [handle $bus]
+    dbus filter $dbus add \
       -type signal -path $path -interface $intf -member $name
     set args {}
     set info {{}}
@@ -609,27 +697,26 @@ proc dbus::dbif::listen {args} {
 	    lset info 0 [lindex $info 0]$sig
 	}
     }
-    set ns [getns $interp]
+    set ns [getns]
     set code [list apply [list [linsert $args 0 msgid] $body $ns]]
     foreach n $info {
-    	set dict [dict create command $code interp $interp]
-    	dict set hear($bus,$path,$intf) $name,$n $dict
+    	set dict [dict create command $code]
+    	dict set hear($dbus,$path,$intf) $name,$n $dict
     }
-    dbus listen $bus $path $intf.$name [list dbus::dbif::signals $bus]
+    dbus listen $dbus $path $intf.$name [list dbus::dbif::signals $dbus]
 }
 
 # Send a response to a DBus message
 #
 proc dbus::dbif::respond {response id result {name ""}} {
-    variable info; variable dbif
+    variable info
     if {![info exists info($id)]} {
 	error "Message ID $id does not exist"
     }
     dict with info($id) {}
     expire $id
     if {$noreply} return
-    set dict [dict get $dbif($bus,$path,$interface) methods $member,$signature]
-    dict with dict {
+    dict with resp {
 	if {$response eq "error"} {
 	    if {$name eq ""} {
 		dbus error $bus $sender $serial $result
@@ -651,20 +738,49 @@ proc dbus::dbif::respond {response id result {name ""}} {
 proc dbus::dbif::delete {args} {
     variable defaults; variable dbif; variable signal
     dict with defaults {}
+    set recurse 1
     cmdline opt arg {path} $args {
 	-bus: {set bus [buscheck $arg]}
 	-interface: {set intf [intfcheck $arg]}
+	-single {set recurse 0}
     }
-    pathcheck $path
-    if {$path eq "/"} {set pat /*} else {set pat $path/*}
-    set paths [array names dbif($bus,$pat,$intf)]
-    if {[info exists dbif($bus,$path,$intf)]} {lappend paths $bus,$path,$intf}
+    set dbus [handle $bus]
+    set paths {}
+    if {$path ne {}} {
+	pathcheck $path
+	if {$recurse} {
+	    if {$path eq "/"} {set pat /*} else {set pat $path/*}
+	    set paths [array names dbif $dbus|$pat|$intf]
+	}
+    }
+    if {[info exists dbif($dbus|$path|$intf)]} {
+	lappend paths $dbus|$path|$intf
+    }
     foreach n $paths {
 	foreach sig [dict get $dbif($n) signals] {
 	    unset -nocomplain signal($sig)
 	}
+	dict for {prop -} [dict get $dbif($n) properties] {
+	    vartrace remove $dbus $path $intf $prop
+	}
 	unset dbif($n)
     }
+}
+
+# Create an object path so it will be listed with introspect
+#
+proc dbus::dbif::pave {args} {
+    variable defaults; variable dbif; variable signal
+    dict with defaults {}
+    set recurse 1
+    cmdline opt arg {path} $args {
+	-bus: {set bus [buscheck $arg]}
+	-interface: {set intf [intfcheck $arg]}
+    }
+    set dbus [handle $bus]
+    pathcheck $path
+    create $dbus $path $intf
+    return
 }
 
 ########################################################################
@@ -673,19 +789,19 @@ proc dbus::dbif::delete {args} {
 
 # Handle a property set request
 #
-proc dbus::dbif::propset {bus data intf name arg} {
-    variable dbif; variable info
+proc dbus::dbif::propset {dbus data intf name arg} {
+    variable dbif; variable info; variable msgid; variable timeout
     set path [dict get $data path]
-    if {![info exists dbif($bus,$path,$intf)]} {
-    	dbuserr interface $bus $path $intf
+    if {![info exists dbif($dbus|$path|$intf)]} {
+    	dbuserr interface $dbus $path $intf
     }
-    if {![dict exists $dbif($bus,$path,$intf) properties $name]} {
-    	dbuserr property $bus $path $intf $name
+    if {![dict exists $dbif($dbus|$path|$intf) properties $name]} {
+    	dbuserr property $dbus $path $intf $name
     }
-    set dict [dict get $dbif($bus,$path,$intf) properties $name]
+    set dict [dict get $dbif($dbus|$path|$intf) properties $name]
     dict with dict {
 	if {$access ni {write readwrite}} {
-    	    dbuserr access $bus $path $intf $name write
+    	    dbuserr access $dbus $path $intf $name write
 	}
 	# Strip off the two string arguments for interface and name
 	set sig [dict get $data signature]
@@ -694,116 +810,121 @@ proc dbus::dbif::propset {bus data intf name arg} {
 	    lassign $arg sig arg
 	}
 	if {$sig ne "v" && $sig ne $signature} {
-	    dbuserr signature $bus $path $intf $name $sig $signature
+	    dbuserr signature $dbus $path $intf $name $sig $signature
     	}
 	if {$command ne ""} {
-	    # Failures will automatically be reported back to the caller
-  	    interp eval $interp [list uplevel #0 [linsert $command end $arg]]
+	    set id message[incr msgid]
+	    set afterid [after $timeout [list dbus::dbif::expire $id]]
+	    set info($id) \
+	      [dict merge $data [dict create bus $dbus afterid $afterid]]
+	    if {[catch {uplevel #0 [linsert $command end $id $arg]} res opts]} {
+		expire $id
+		# Rethrow the error so it gets reported back to the caller
+		return -options [dict incr opts -level] $res
+	    }
+	    expire $id
 	}
-	interp eval $interp [list uplevel #0 [list set $variable $arg]]
+	uplevel #0 [list set $variable $arg]
     }
     dict with data {
-    	dbus return $bus $sender $serial
+    	dbus return $dbus $sender $serial
     }
     return -async 1
 }
 
 # Handle a property get request
 #
-proc dbus::dbif::propget {bus data intf name} {
-    variable dbif; variable info
+proc dbus::dbif::propget {dbus data intf name} {
+    variable dbif
     set path [dict get $data path]
-    if {![info exists dbif($bus,$path,$intf)]} {
-	dbuserr interface $bus $path $intf
+    if {![info exists dbif($dbus|$path|$intf)]} {
+	dbuserr interface $dbus $path $intf
     }
-    if {![dict exists $dbif($bus,$path,$intf) properties $name]} {
-	dbuserr property $bus $path $intf $name
+    if {![dict exists $dbif($dbus|$path|$intf) properties $name]} {
+	dbuserr property $dbus $path $intf $name
     }
-    set op [dict get $dbif($bus,$path,$intf) properties $name access]
-    if {$op ni {read readwrite}} {dbuserr access $bus $path $intf $name read}
-    set interp [dict get $dbif($bus,$path,$intf) properties $name interp]
-    set var [dict get $dbif($bus,$path,$intf) properties $name variable]
-    if {[interp eval $interp [list uplevel #0 [list info exists $var]]]} {
-	set sig [dict get $dbif($bus,$path,$intf) properties $name signature]
+    set op [dict get $dbif($dbus|$path|$intf) properties $name access]
+    if {$op ni {read readwrite}} {dbuserr access $dbus $path $intf $name read}
+    set var [dict get $dbif($dbus|$path|$intf) properties $name variable]
+    if {[uplevel #0 [list info exists $var]]} {
+	set sig [dict get $dbif($dbus|$path|$intf) properties $name signature]
 	set dest [dict get $data sender]
 	set serial [dict get $data serial]
-	set value [interp eval $interp [list uplevel #0 [list set $var]]]
-	dbus return $bus -signature $sig $dest $serial $value
+	set value [uplevel #0 [list set $var]]
+	dbus return $dbus -signature $sig $dest $serial $value
     } else {
-	dbuserr propunset $bus $path $intf $name
+	dbuserr propunset $dbus $path $intf $name
     }
     return -async 1
 }
 
 # Handle a property getall request
 #
-proc dbus::dbif::propdump {bus data {intf ""} args} {
-    variable dbif; variable info
+proc dbus::dbif::propdump {dbus data {intf ""} args} {
+    variable dbif
     set path [dict get $data path]
-    if {![info exists dbif($bus,$path,$intf)]} {
-	dbuserr interface $bus $path $intf
+    if {![info exists dbif($dbus|$path|$intf)]} {
+	dbuserr interface $dbus $path $intf
     }
-    if {![dict exists $dbif($bus,$path,$intf) properties]} {return {}}
+    if {![dict exists $dbif($dbus|$path|$intf) properties]} {return {}}
     set rc {}
-    dict for {n v} [dict get $dbif($bus,$path,$intf) properties] {
-	set interp [dict get $v interp]
+    dict for {n v} [dict get $dbif($dbus|$path|$intf) properties] {
 	set var [dict get $v variable]
-	if {[interp eval $interp [list uplevel #0 [list info exists $var]]]} {
+	if {[uplevel #0 [list info exists $var]]} {
 	    set sig [dict get $v signature]
-	    set value [interp eval $interp [list uplevel #0 [list set $var]]]
+	    set value [uplevel #0 [list set $var]]
 	    lappend rc $n [list $sig $value]
 	}
     }
     dict with data {
- 	dbus return $bus -signature a{sv} $sender $serial $rc
+ 	dbus return $dbus -signature a{sv} $sender $serial $rc
     }
     return -async 1
 }
 
 # Track property changes
-proc dbus::dbif::propchg {bus path intf prop inv name1 name2 op} {
+proc dbus::dbif::propchg {dbus path intf prop inv name1 name2 op} {
     variable propchg
     if {$op eq "unset"} {
 	# After an unset trace fires, the trace is removed
-	vartrace add $bus $path $intf $prop
+	vartrace add $dbus $path $intf $prop
     }
 
     if {$inv} {set op invalid}
-    dict set propchg $bus $path $intf $prop $op
+    dict set propchg $dbus $path $intf $prop $op
 
     after cancel [namespace code propchgsignal]
     after idle [namespace code propchgsignal]
 }
 
-proc dbus::dbif::propchanged {path {intf ""} {bus ""}} {
+proc dbus::dbif::propchanged {path {intf ""} {dbus ""}} {
     variable propchg
-    if {$bus eq ""} {
+    if {$dbus eq ""} {
 	variable defaults
-	set bus [dict get $defaults bus]
+	set dbus [handle [dict get $defaults bus]]
 	if {$intf eq ""} {set intf [dict get $defaults intf]}
     }
-    if {![dict exists $propchg $bus $path $intf]} {
+    if {![dict exists $propchg $dbus $path $intf]} {
 	# Don't generate the signal
 	return -code return
     }
     variable dbif
     set change {}
     set invalid {}
-    dict for {key op} [dict get $propchg $bus $path $intf] {
+    dict for {key op} [dict get $propchg $dbus $path $intf] {
 	if {$op eq "write"} {
-	    set info [dict get $dbif($bus,$path,$intf) properties $key]
+	    set info [dict get $dbif($dbus|$path|$intf) properties $key]
 	    dict with info {}
-	    set value [interp eval $interp \
-	      [list uplevel #0 [list set $variable]]]
+	    set value [uplevel #0 [list set $variable]]
 	    dict set change $key [list $signature $value]
 	} else {
 	    lappend invalid $key
 	}
     }
-    dict unset propchg $bus $path $intf
+    dict unset propchg $dbus $path $intf
     variable signal
     # Put the details into the signal (not the interface!)
-    dict set signal(PropertiesChanged) bus $bus
+    dict set signal(PropertiesChanged) dbus $dbus
     dict set signal(PropertiesChanged) path $path
     return [list $intf $change $invalid]
 }
@@ -812,11 +933,22 @@ proc dbus::dbif::propchanged {path {intf ""} {bus ""}} {
 #
 proc dbus::dbif::propchgsignal {} {
     variable propchg
-    dict for {bus data} $propchg {
+    dict for {dbus data} $propchg {
 	dict for {path dict} $data {
 	    dict for {intf chg} $dict {
 		if {[dict size $chg] > 0} {
-		    generate PropertiesChanged $path $intf $bus
+		    # Report values that do not match the signature
+		    if {[catch {generate PropertiesChanged \
+		      $path $intf $dbus} msg opts]} {
+			set str "failed to generate the PropertiesChanged\
+			  dbus signal for interface '$intf' on path '$path'.\
+			  Reason: $msg"
+			dict set opts -errorinfo $str
+			# Get the error reporting command
+			set errcmd [interp bgerror {}]
+			# Report the error without throwing an exception
+			catch {{*}$errcmd $str $opts}
+		    }
 		}
 	    }
 	}
@@ -829,131 +961,142 @@ proc dbus::dbif::propchgsignal {} {
 # Introspection procedures
 ########################################################################
 
-proc dbus::dbif::node {bus path} {
-    variable dbif
-    set list [array names dbif $bus,$path,*]
-    if {[llength $list] == 0} return
-    set rc {
-	{<!DOCTYPE node PUBLIC\
-	  "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"}
-	{"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">}
-    }
-    lappend rc {<node>}
-    foreach n $list {
-	set i [lindex [split $n ,] 2]
-	set dict $dbif($n)
-	if {[info exists dbif($bus,,$i)]} {
-	    dict with dict {
-		set std $dbif($bus,,$i)
-		set methods [dict merge [dict get $std methods] $methods]
-		set properties \
-		  [dict merge [dict get $std properties] $properties]
-		foreach n [dict get $std signals] {
-		    if {$n ni $signals} {lappend signals $n}
+proc dbus::dbif::node {dbus path {init {node {{} {interface {}}}}} {pat *}} {
+    variable dbif; variable signal
+    set rc $init
+    foreach match [array names dbif $dbus|$path|$pat] {
+	set intfname [lindex [split $match |] 2]
+	dict with rc node {} {
+	    dict update interface $intfname intf {
+		# [lappend intf] would shimmer an existing dict to a list
+		if {![info exists intf]} {set intf {}}
+		# Methods
+		dict for {spec dict} [dict get $dbif($match) methods] {
+		    if {[dict exists $dict meta Internal.Prune]} {
+			if {![dict exists $init node {} interface $intfname]} {
+			    set skip [dict get $dict meta Internal.Prune]
+			    if {[string is true -strict $skip]} continue
+			}
+		    }
+		    if {[dict exists $intf method $spec]} continue
+		    set args {}
+		    foreach n {in out} {
+			foreach {arg sig} [dict get $dict $n] {
+			    lappend args $arg [dict create {} \
+			      [dict create type $sig direction $n]]
+			}
+		    }
+		    dict set intf method $spec arg $args
+		    foreach {key value} [dict get $dict meta] {
+			if {[string match Internal.* $key]} continue
+			dict set intf method $spec \
+			  annotation org.freedesktop.DBus.$key {} value $value
+		    }
+		}
+		# Signals
+		foreach n [dict get $dbif($match) signals] {
+		    set name [dict get $signal($n) name]
+		    if {[dict exists $signal($n) meta Internal.Prune]} {
+			if {![dict exists $init node {} interface $intfname]} {
+			    set skip [dict get $signal($n) meta Internal.Prune]
+			    if {[string is true -strict $skip]} continue
+			}
+		    }
+		    if {[dict exists $intf signal $name]} continue
+		    set args [dict get $signal($n) args]
+		    # In case a signal has no arguments
+		    dict set intf signal $name {}
+		    dict for {arg type} $args {
+			dict set intf signal $name arg $arg {} type $type
+		    }
+		    foreach {key value} [dict get $signal($n) meta] {
+			if {[string match Internal.* $key]} continue
+			dict set intf signal $name \
+			  annotation org.freedesktop.DBus.$key {} value $value
+		    }
+		}
+		# Properties
+		dict for {prop dict} [dict get $dbif($match) properties] {
+		    dict update dict signature type access access {}
+		    dict set intf property $prop {} \
+		      [dict create type $type access $access]
+		    dict for {key value} [dict get $dict meta] {
+			dict set intf property $prop \
+			  annotation org.freedesktop.DBus.$key {} value $value
+		    }
 		}
 	    }
 	}
-	lappend rc [interface $i $dict "  "]
-	lappend ilist $i
     }
-    foreach n [array names dbif $bus,,*] {
-	set i [lindex [split $n ,] 2]
-	if {$i ni $ilist} {
-	    lappend rc [interface $i $dbif($n) "  "]
+    if {$path ne ""} {
+	if {$path eq "/"} {
+	    set pat /?*
+	    set index 1
+	} else {
+	    set pat $path/*
+	    set index [llength [split $path /]]
+	}
+	foreach n [array names dbif $dbus|$pat|*] {
+	    set node [lindex [split [lindex [split $n |] 1] /] $index]
+	    dict set rc node {} node $node {}
 	}
     }
-    set parent(/) {}
-    foreach n [array names dbif $bus,$path*] {
-	set p [lindex [split $n ,] 1]
-	if {$p eq "/"} continue
-	set dir /
-	foreach d [lrange [split $p /] 1 end] {
-	    lappend parent($dir) $d
-	    if {$dir eq "/"} {set dir ""}
-	    append dir / $d
-	    lappend parent($dir)
-	}
-    }
-    foreach n [lsort -unique $parent($path)] {
-	lappend rc [format {  <node name="%s"/>} $n]
-    }
-    lappend rc {</node>} {}
-    join $rc \n
+    return $rc
 }
 
-proc dbus::dbif::interface {intf dict tab} {
-    variable signal
-    set rc [list [format {%s<interface name="%s">} $tab $intf]]
-    if {[dict exists $dict methods]} {
-	dict for {n v} [dict get $dict methods] {
-	    lassign [split $n ,] name sig
-	    lappend rc [format {%s  <method name="%s">} $tab $name]
-	    foreach {arg sig} [dict get $dict methods $n in] {
-    		lappend rc [format {%s    <arg name="%s" type="%s"\
-		  direction="%s"/>} $tab $arg $sig in]
+proc dbus::dbif::xmlize {dict} {
+    set rc {}
+    dict for {tag data} $dict {
+	foreach {name spec} $data {
+	    set str $tag
+	    set lines {}
+	    if {$name ne {}} {
+		append str [format { name="%s"} [lindex [split $name ,] 0]]
 	    }
-	    foreach {arg sig} [dict get $dict methods $n out] {
-    		lappend rc [format {%s    <arg name="%s" type="%s"\
-		  direction="%s"/>} $tab $arg $sig out]
+	    if {[dict exists $spec {}]} {
+		dict for {attrib value} [dict get $spec {}] {
+		    append str [format { %s="%s"} $attrib $value]
+		}
+		dict unset spec {}
 	    }
-	    foreach {key value} [dict get $dict methods $n meta] {
-		lappend rc [format {%s    <annotation name="%s" value="%s"/>} \
-		  $tab org.freedesktop.DBus.$key $value]
+	    if {[dict size $spec]} {
+		foreach line [xmlize $spec] {
+		    lappend lines [format {  %s} $line]
+		}
 	    }
-	    lappend rc [format {%s  </method>} $tab]
+	    if {[llength $lines] > 0} {
+		lappend rc <$str> {*}$lines </$tag>
+	    } else {
+		lappend rc <$str/>
+	    }
 	}
     }
-    if {[dict exists $dict signals]} {
-	foreach n [dict get $dict signals] {
-	    set name [dict get $signal($n) name]
-	    lappend rc [format {%s  <signal name="%s">} $tab $name]
-	    foreach {arg sig} [dict get $signal($n) args] {
-    		lappend rc [format {%s    <arg name="%s" type="%s"/>} \
-		  $tab $arg $sig]
-	    }
-	    foreach {key value} [dict get $signal($n) meta] {
-		lappend rc [format {%s    <annotation name="%s" value="%s"/>} \
-		  $tab org.freedesktop.DBus.$key $value]
-	    }
-	    lappend rc [format {%s  </signal>} $tab]
-	}
-    }
-    if {[dict exists $dict properties]} {
-	dict for {name v} [dict get $dict properties] {
-	    dict with v {}
-	    if {[dict size $meta] == 0} {
-		lappend rc [format {%s  <property name="%s" type="%s"\
-		  access="%s"/>} $tab $name $signature $access]
-		continue
-	    }
-	    lappend rc [format {%s  <property name="%s" type="%s"\
-	      access="%s">} $tab $name $signature $access]
-	    foreach {key value} $meta {
-		lappend rc [format {%s    <annotation name="%s" value="%s"/>} \
-		  $tab org.freedesktop.DBus.$key $value]
-	    }
-	    lappend rc [format {%s  </property>} $tab]
-	}
-    }
-    lappend rc [format {%s</interface>} $tab]
-    return [join $rc \n]
+    return $rc
 }
 
-proc dbus::dbif::standard {bus} {
+proc dbus::dbif::xml {dict} {
+    variable dtd
+    return [join [linsert [xmlize $dict] 0 $dtd] \n]
+}    
+
+proc dbus::dbif::standard {dbus} {
     variable dbif
     variable trace
-    set arg1 [dict create in {interface_name s property_name s} out {value v} meta {}]
-    set arg2 [dict create in {interface_name s property_name s value v} out {} meta {}]
-    set arg3 [dict create in {interface_name s} out {values a{sv}} meta {}]
-    create $bus "" org.freedesktop.DBus.Properties
-    dict set dbif($bus,,org.freedesktop.DBus.Properties) methods \
+    set arg1 [dict create meta {} \
+      in {interface_name s property_name s} out {value v}]
+    set arg2 [dict create meta {} \
+      in {interface_name s property_name s value v} out {}]
+    set arg3 [dict create meta {} \
+      in {interface_name s} out {values a{sv}}]
+    create $dbus "" org.freedesktop.DBus.Properties
+    dict set dbif($dbus||org.freedesktop.DBus.Properties) methods \
       [dict create Get,ss $arg1 Set,ssv $arg2 GetAll,sa{sv} $arg3]
     if {$trace} {
-	dict set dbif($bus,,org.freedesktop.DBus.Properties) signals \
+	dict set dbif($dbus||org.freedesktop.DBus.Properties) signals \
 	  [list PropertiesChanged]
     }
-    create $bus "" org.freedesktop.DBus.Introspectable
-    dict set dbif($bus,,org.freedesktop.DBus.Introspectable) methods \
+    create $dbus "" org.freedesktop.DBus.Introspectable
+    dict set dbif($dbus||org.freedesktop.DBus.Introspectable) methods \
       [dict create Introspect, [dict create in {} out {xml_data s} meta {}]]
 }
 
@@ -969,33 +1112,47 @@ proc dbus::dbif::ping {data args} {
     return
 }
 
-proc dbus::dbif::machineid {bus data args} {
-    return [dbus info $bus machineid]
+proc dbus::dbif::machineid {dbus data args} {
+    return [dbus info $dbus machineid]
 }
 
-proc dbus::dbif::introspect {bus data args} {
-    return [node $bus [dict get $data path]]
+proc dbus::dbif::introspect {dbus data args} {
+    # Find all properties, methods and signals with the requested path
+    set dict [node $dbus [dict get $data path]]
+    if {[dict size [dict get $dict node {} interface]] == 0 && \
+      ![dict exists $dict node {} node]} {
+	dbuserr path $dbus [dict get $data path]
+    }
+    # Add methods and signals that do not have a path specified
+    set dict [node $dbus {} $dict]
+    return [xml $dict]
 }
 
-proc dbus::dbif::methods {bus data args} {
+proc dbus::dbif::methods {dbus data args} {
     variable timeout; variable msgid; variable info; variable dbif
     dict with data {}
-    if {![info exists dbif($bus,$path,$interface)]} {
-	dbuserr interface $bus $path $interface
+    if {![info exists dbif($dbus|$path|$interface)]} {
+	dbuserr interface $dbus $path $interface
+    } elseif {[dict exists \
+	  $dbif($dbus|$path|$interface) methods $member,$signature]} {
+	set p $path
+    } elseif {[info exists dbif($dbus||$interface)] && \
+      [dict exists $dbif($dbus||$interface) methods $member,$signature]} {
+	set p ""
+    } else {
+	dbuserr member $dbus $path $interface $member $signature
     }
-    if {![dict exists $dbif($bus,$path,$interface) \
-      methods $member,$signature]} {
-	dbuserr member $bus $path $interface $member $signature
-    }
-    set dict [dict get $dbif($bus,$path,$interface) methods $member,$signature]
+    set dict [dict get $dbif($dbus|$p|$interface) methods $member,$signature]
 
     set id message[incr msgid]
     # Allow 25 seconds for the application to provide a response
     set afterid [after $timeout [list dbus::dbif::expire $id]]
-    set info($id) [dict merge $data [dict create bus $bus afterid $afterid]]
+    set info($id) [dict merge $data [dict create bus $dbus afterid $afterid]]
+    # Store a copy of the information needed to provide a response. This
+    # information would otherwise be lost if the code deletes its own path.
+    dict set info($id) resp $dict
     dict with dict {
-    	if {[catch {interp eval $interp \
-	  [list uplevel #0 $command [linsert $args 0 $id]]} result opts]} {
+    	if {[catch {uplevel #0 $command [linsert $args 0 $id]} result opts]} {
 	    respond error $id $result
 	} elseif {$async || [async $opts]} {
     	    # Keep the message information around for a bit more
@@ -1008,18 +1165,18 @@ proc dbus::dbif::methods {bus data args} {
     return -async 1
 }
 
-proc dbus::dbif::signals {bus data args} {
+proc dbus::dbif::signals {dbus data args} {
     variable msgid; variable info; variable hear
     dict with data {}
     # Check that a handler was defined for the member/signature combination
-    if {![dict exists $hear($bus,$path,$interface) $member,$signature]} return
+    if {![dict exists $hear($dbus,$path,$interface) $member,$signature]} return
 
     set id message[incr msgid]
-    set info($id) [dict merge $data [dict create bus $bus afterid $id]]
-    set dict [dict get $hear($bus,$path,$interface) $member,$signature]
+    set info($id) [dict merge $data [dict create bus $dbus afterid $id]]
+    set dict [dict get $hear($dbus,$path,$interface) $member,$signature]
     catch {
 	dict with dict {
-	    interp eval $interp [list uplevel #0 $command [linsert $args 0 $id]]
+	    uplevel #0 $command [linsert $args 0 $id]
 	}
     }
     # Clean up

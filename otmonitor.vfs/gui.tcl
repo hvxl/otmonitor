@@ -1706,6 +1706,36 @@ proc gui::cfgintervaltrc {varname sub op} {
     set cfg($sub) [expr {$var($sub) * 1000}]
 }
 
+proc gui::selectbox {w args} {
+    set opts [dict remove $args -variable -default]
+    set args [dict merge {-values {} -variable {} -default {}} $args]
+    set valdict [dict get $args -values]
+    set varname [dict get $args -variable]
+    set default [dict get $args -default]
+    set choices [dict keys $valdict]
+    dict set opts -values [dict values $valdict]
+    ttk::combobox $w {*}$opts -state readonly
+    # Work around bug #2969488: https://core.tcl-lang.org/tcl/tktview/2969488
+    set func {{w var list} \
+      {uplevel #0 [list set $var [lindex $list [$w current]]]}}
+    bind $w <<ComboboxSelected>> [list apply $func %W $varname $choices]
+    set trace [list apply [list {w name list args} {
+	upvar #0 $name var
+	set x [lsearch -exact $list $var]
+	if {$x >= 0} {$w current $x}
+    }] $w $varname $choices]
+    trace add variable ::$varname write $trace
+    bind $w <Destroy> [list trace remove variable $varname write $trace]
+    upvar #0 $varname var
+    if {[dict exists $valdict $var]} {
+	$w set [dict get $valdict $var]
+    } elseif {[dict exists $valdict $default]} {
+	$w set [dict get $valdict $default]
+    } elseif {[dict size $valdict]} {
+	$w current 0
+    }
+}
+
 proc gui::cfgmqtt {w} {
     global cfg
     ttk::checkbutton $w.c1 -text "Enable MQTT" -command mqttserver \
@@ -1715,6 +1745,11 @@ proc gui::cfgmqtt {w} {
     ttk::entrybox $w.f1.e1 -textvariable cfg(mqtt,broker)
     ttk::label $w.f1.l2 -text "Broker Port:"
     ttk::entrybox $w.f1.e2 -textvariable cfg(mqtt,port) -width 8
+    ttk::checkbutton $w.f1.c2 -text "SSL/TLS" \
+      -variable cfg(mqtt,secure) -onvalue true -offvalue false
+    ttk::label $w.f1.l12 -text "Protocol:"
+    selectbox $w.f1.e12 -width 10 -variable cfg(mqtt,version) \
+      -values {3 "MQTT v3.1" 4 "MQTT v3.1.1" 5 "MQTT v5"} -default 5
     ttk::label $w.f1.l3 -text "Client Identifier:"
     ttk::entrybox $w.f1.e3 -textvariable cfg(mqtt,client)
     ttk::label $w.f1.l4 -text "User Name:"
@@ -1726,21 +1761,11 @@ proc gui::cfgmqtt {w} {
     ttk::label $w.f1.l7 -text "Action topic prefix:"
     ttk::entrybox $w.f1.e7 -textvariable cfg(mqtt,actiontopic)
     ttk::label $w.f1.l11 -text "Data Format:"
-    set valdict {
+    selectbox $w.f1.e11 -width 15 -variable cfg(mqtt,format) -values {
 	json1 "Simple JSON"
 	json2 "Standard JSON"
 	json3 "Extended JSON"
 	raw "Unformatted"
-    }
-    ttk::combobox $w.f1.e11 -state readonly -width 15 \
-      -values [dict values $valdict]
-    set func {{w list} {set ::cfg(mqtt,format) [lindex $list [$w current]]}}
-    bind $w.f1.e11 <<ComboboxSelected>> \
-      [list apply $func %W [dict keys $valdict]]
-    if {[dict exists $valdict $cfg(mqtt,format)]} {
-	$w.f1.e11 set [dict get $valdict $cfg(mqtt,format)]
-    } else {
-	$w.f1.e11 current 0
     }
     ttk::checkbutton $w.f1.c11 -text "All Messages" \
       -variable cfg(mqtt,messages) -onvalue true -offvalue false
@@ -1755,7 +1780,8 @@ proc gui::cfgmqtt {w} {
     ttk::spinbox $w.f1.e9 -to 65536 -textvariable cfg(mqtt,retransmit) -width 8
 
     grid $w.f1.l1 $w.f1.e1 - -sticky we -padx 6 -pady 3
-    grid $w.f1.l2 $w.f1.e2 - -sticky we -padx 6 -pady 3
+    grid $w.f1.l2 $w.f1.e2 $w.f1.c2 -sticky we -padx 6 -pady 3
+    grid $w.f1.l12 $w.f1.e12 - -sticky we -padx 6 -pady 3
     grid $w.f1.l3 $w.f1.e3 - -sticky we -padx 6 -pady 3
     grid $w.f1.l4 $w.f1.e4 - -sticky we -padx 6 -pady 3
     grid $w.f1.l5 $w.f1.e5 - -sticky we -padx 6 -pady 3
@@ -1765,7 +1791,7 @@ proc gui::cfgmqtt {w} {
     grid $w.f1.l10 $w.f1.e10 - -sticky we -padx 6 -pady 3
     grid $w.f1.l8 $w.f1.e8 - -sticky we -padx 6 -pady 3
     grid $w.f1.l9 $w.f1.e9 - -sticky we -padx 6 -pady 3
-    grid $w.f1.e2 $w.f1.e8 $w.f1.e9 $w.f1.e10 $w.f1.e11 -sticky w
+    grid $w.f1.e2 $w.f1.e8 $w.f1.e9 $w.f1.e10 $w.f1.e11 $w.f1.e12 -sticky w
     grid columnconfigure $w.f1 $w.f1.e11 -weight 1
     
     pack $w.f1 -fill x -side top

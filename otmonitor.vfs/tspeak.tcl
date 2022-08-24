@@ -2,9 +2,8 @@
 # api_key=MYQL01QU749XE0XR
 
 package require http
-package require tls
-
-http::register https 443 tls::socket
+http::register http 80 [socketcommand]
+http::register https 443 [socketcommand 1]
 
 namespace eval tspeak {
     variable uri https://api.thingspeak.com/update

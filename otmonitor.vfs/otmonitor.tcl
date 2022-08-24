@@ -675,6 +675,79 @@ proc voltage {name val} {
     set voltage [format %.3f [expr {voltage($var)}]]
 }
 
+proc loadtls {} {
+    global tcl_platform
+    upvar #0 socketcommand(secure) cmd
+    set twapi 0
+    if {$tcl_platform(platform) eq "windows"} {
+	if {[package vsatisfies $tcl_platform(osVersion) 10.0]} {
+	    set twapi 1
+	} else {
+	    set key HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\SCHANNEL\\Protocols
+	    if {{TLS 1.2} in [registry keys $key]} {
+		catch {
+		    set disabled \
+		      [registry get "$key\\TLS 1.2\\Client" DisabledByDefault]
+		    if {!$disabled} {set twapi 1}
+		}
+	    }
+	}
+    }
+    if {$twapi && ![catch {package require twapi_crypto}]} {
+	twapi::tls_socket_command [socketcommand]
+	set cmd twapi::tls_socket
+	proc starttls {fd args} {
+	    if {[dict exists $args -servername]} {
+		# twapi uses -peersubject instead of -servername
+		dict set args -peersubject [dict get $args -servername]
+		dict unset args -servername
+	    } else {
+		# A -peersubject must be provided, use the best guess
+		dict set args -peersubject [lindex [fconfigure $fd -peername] 1]
+	    }
+	    return [twapi::starttls $fd {*}$args]
+	}
+	return twapi
+    }
+    if {![catch {package require tls}]} {
+	tls::init -autoservername 1
+	set tls::socketCmd [socketcommand]
+	set cmd tls::socket
+	proc starttls {fd args} {
+	    tls::import $fd
+	    return $fd
+	}
+	return tcltls
+    }
+    set cmd ""
+    return
+}
+
+proc socketcommand {{secure 0}} {
+    upvar #0 socketcommand(socket) socketcmd socketcommand(secure) securecmd
+    # Figure out the preferred socket command to use
+    if {$secure} {
+	if {![info exists securecmd]} {loadtls}
+	return $securecmd
+    } else {
+	if {![info exists socketcmd]} {
+	    set socketcmd [namespace which socket]
+	    if {$::tcl_platform(platform) eq "windows"} {
+		if {![catch {package require iocp_inet}]} {
+		    set socketcmd iocp::inet::socket
+		}
+	    }
+	}
+	return $socketcmd
+    }
+}
+
+proc starttls {fd args} {
+    if {[loadtls] ne ""} {
+	tailcall starttls $fd {*}$args
+    }
+}
+
 proc ts {{ts ""}} {
     global timestamp
     if {$ts eq ""} {set ts [clock microseconds]}
@@ -1289,8 +1362,9 @@ proc connectcoro {type} {
     while 1 {
 	try {
 	    if {$cfg(connection,type) eq "tcp"} {
-		set dev \
-		  [socket -async $cfg(connection,host) $cfg(connection,port)]
+		# The name lookup can still block the application
+		set dev [[socketcommand] -async \
+		  $cfg(connection,host) $cfg(connection,port)]
 		fileevent $dev writable [list socketresult $dev $type]
 		if {$type ne "reconnect"} {
 		    status "Connecting ..."
@@ -1472,9 +1546,9 @@ proc relayserver {} {
     global cfg relayfd clients
     if {$cfg(server,enable)} {
 	try {
-	    set relayfd [socket -server {apply {
-		    {fd args} {coroutine server-$fd server $fd {*}$args}
-	    }} $cfg(server,port)]
+	    set relayfd [[socketcommand] -server [list apply {
+		{fd args} {coroutine server-$fd server $fd {*}$args}
+	    }] $cfg(server,port)]
 	} on error msg {
 	    set cfg(server,enable) false
 	    return $msg
@@ -1785,6 +1859,12 @@ proc signalproc {proc} {
     }
 }
 
+proc json args {
+    # Load the json functionality on first use
+    include json.tcl
+    tailcall json {*}$args
+}
+
 proc webstatus {} {
     global wibblesock webstatus cfg
     set open {}
@@ -1994,7 +2074,7 @@ array set cfg {
     web,theme		default
     web,enable		false
     web,sslport		0
-    web,sslprotocols	tls1,tls1.1,tls1.2
+    web,sslprotocols	tls1.2,tls1.3
     web,nopass		true
     web,certonly	false
     web,graphlegend	false
@@ -2039,6 +2119,8 @@ array set cfg {
     mqtt,enable		false
     mqtt,broker		localhost
     mqtt,port		1883
+    mqtt,secure		false
+    mqtt,version	5
     mqtt,client		""
     mqtt,username	""
     mqtt,password	""
@@ -2097,6 +2179,10 @@ set cfg(mqtt,client) [lindex [split [info hostname] .] 0]-otmon
 # Override the defaults with saved settings, if any
 if {$configfile ne ""} {
     settings file $configfile
+    if {[file exists $configfile]} {
+	# Existing configurations continue to use MQTT v3.1.1 by default
+	set cfg(mqtt,version) 4
+    }
 }
 foreach n [array names cfg] {
     lassign [split $n ,] group name

@@ -1,6 +1,8 @@
 % global cfg
+<!DOCTYPE html>
 <html>
 <head>
+<meta charset="utf-8">
 <link rel="stylesheet" type="text/css" href="config.css">
 <script>
 var query = {"var": "cfg"};
@@ -31,10 +33,25 @@ function mqtt(w) {
 </tr>
 <tr>
 <td>Broker port:</td>
-<td colspan="2">
+<td>
 <input type="text" size="8" id="mqtt,port" value="$cfg(mqtt,port)" onchange="input(this, 'mqtt', 'port')">
 </td>
+<td width="20%" style="white-space:nowrap;">
+<input type="checkbox" id="mqtt,secure" [checked mqtt,secure] onchange="flag(this, 'mqtt', 'secure')">
+<label for="mqtt,secure">SSL/TLS&nbsp;&nbsp;</label></td>
 </tr>
+
+<tr>
+<td>Protocol:</td>
+<td>
+<select id="mqtt,version" onchange="input(this, 'mqtt', 'version')">
+<option [selected cfg(mqtt,version) 3]>MQTT v3.1</option>
+<option [selected cfg(mqtt,version) 4]>MQTT v3.1.1</option>
+<option [selected cfg(mqtt,version) 5]>MQTT v5</option>
+</select>
+</td>
+</tr>
+
 <tr>
 <td>Client identifier:</td>
 <td colspan="2" class="fill">
@@ -75,7 +92,7 @@ function mqtt(w) {
 <option [selected cfg(mqtt,format) raw]>Unformatted</option>
 </select>
 </td>
-<td align="right">
+<td style="white-space:nowrap;">
 <input type="checkbox" id="mqtt,messages" [checked mqtt,messages] onchange="flag(this, 'mqtt', 'messages')">
 <label for="mqtt,messages">All Messages&nbsp;&nbsp;</label>
 </td>

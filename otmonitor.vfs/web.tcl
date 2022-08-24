@@ -5,6 +5,7 @@ wibble reset
 
 proc webinit {} {
     global cfg
+
     set rc [dict create http {port 0} https {port 0}]
     # Try to start the http server
     if {$cfg(web,port) > 0} {
@@ -14,6 +15,7 @@ proc webinit {} {
 	    # puts "Couldn't start wibble on port $cfg(web,port)"
 	}
     }
+
     # Try to start the https server
     if {$cfg(web,sslport) > 0} {
 	set ssldir [file join [file dirname $starkit::topdir] auth]
@@ -25,11 +27,14 @@ proc webinit {} {
 	    # puts "Missing $keyfile or $crtfile"
 	    return $rc
 	}
+	# Currently only a secure server socket using tcltls is supported
 	if {[catch {package require tls} tlsver]} {
 	    # puts "Couldn't load tls package"
 	    return $rc
+	} else {
+	    set socketcmd tls::socket
 	}
-	set cmd [list tls::socket -command callback \
+	set cmd [list $socketcmd -command callback \
 	  -certfile $crtfile -keyfile $keyfile -cafile $rootcrt]
 	if {[file exists $rootcrt]} {
 	    set require [expr {!!$cfg(web,certonly)}]
@@ -37,13 +42,12 @@ proc webinit {} {
 	} else {
 	    lappend cmd -request 0 -require 0
 	}
-	set protocols {ssl2 ssl3 tls1}
-	if {[package vsatisfies $tlsver 1.6.4-]} {
-	    lappend protocols tls1.1 tls1.2
-	}
+	set protocols {ssl2 ssl3 tls1 tls1.1 tls1.2 tls1.3}
 	set enableprot [split $cfg(web,sslprotocols) {, }]
 	foreach prot $protocols {
-	    lappend cmd -$prot [expr {$prot in $enableprot}]
+	    if {$prot ne ""} {
+		lappend cmd -$prot [expr {$prot in $enableprot}]
+	    }
 	}
 	if {![catch {wibble listen $cfg(web,sslport) $cmd} fd]} {
 	    dict set rc https [dict create fd $fd port $cfg(web,sslport)]
@@ -145,7 +149,7 @@ proc ::wibble::zone::json {state} {
     dict set state response status 200
     dict set state response header content-type "" application/json
     dict set state response header Access-Control-Allow-Origin *
-    dict set state response content [::json::dump]
+    dict set state response content [::json build object dump]
     sendresponse [dict get $state response]
 }
 
@@ -205,13 +209,12 @@ proc ::wibble::zone::status {state event args} {
 	if {[array exists var]} {
 	    set val $var($arg)
 	    set what $name
-	    if {$name eq "gui"} {set what status}
-	    if {$name eq "cfg"} {set what config}
 	} else {
 	    set val $var
 	    set arg $name
 	}
-        ws::send text [format {{"%s": {"%s": "%s"}}} $what $arg $val]
+	# [format {{"%s":{"%s":"%s"}}} $what $arg $val]
+        ws::send text [::json build object varchange $what $arg $val]
     }
 
     # Process commands received over the websocket
@@ -479,37 +482,54 @@ namespace eval json {
 	setpoint2	"Room setpoint 2"
 	timestamp	"Time stamp"
     }
+}
 
-    proc dump {} {
-	global dump gui version fwversion
-	variable description
-	set tab "    "
-	set str \n
-	set time [clock format [clock seconds] -format {%Y-%m-%d %T %z}]
-	append str $tab [format {"time": "%s",} $time] \n
+json layout varchange {what name value} {
+    return [list $what [list string::$name $value]]
+}
 
-	set ver \n
-	append ver $tab [format {  "name": "%s",} "Opentherm Gateway"] \n
-	append ver $tab [format {  "version": "%s"} $fwversion] \n
-	append str $tab [format {"firmware": {%s},} $ver$tab] \n
+json layout dump {} {
+    global dump gui version fwversion
+    namespace upvar ::json description description
 
-	set ver \n
-	append ver $tab [format {  "name": "%s",} "Opentherm Monitor"] \n
-	append ver $tab [format {  "version": "%s"} $version] \n
-	append str $tab [format {"software": {%s}} $ver$tab] \n
+    object otgw
+    object firmware
+    object software
 
-	lappend rc [format {  "%s": {%s  }} otgw $str]
-	dict for {key desc} $description {
-	    if {[info exists gui($key)]} {
-		set str \n
-		append str $tab [format {"value": "%s",} $gui($key)] \n
-		append str $tab [format {"description": "%s"} $desc] \n
-		lappend rc [format {  "%s": {%s  }} $key $str]
+    set script {
+	otgw {
+	    string::time [clock format [clock seconds] -format {%Y-%m-%d %T %z}]
+	    firmware {
+		string::name "Opentherm Gateway"
+		string::version $::fwversion
+	    }
+	    software {
+		string::name "Opentherm Monitor"
+		string::version $::version
 	    }
 	}
-	return "{\n[join $rc ,\n]\n}"
     }
+
+    attribute value
+    attribute desc description
+
+    dict for {key desc} $description {
+	if {[info exists gui($key)]} {
+	    set data [dict create value [list string $gui($key)]]
+	    dict set data desc [list string $desc]
+	    dict set script object::$key [script $data]
+	}
+    }
+    return $script
 }
+
+# Create objects for all arrays that may be traced, and var for variables
+json object var
+json object gui status
+json object cfg config
+json object error
+json object led
+json object gpio
 
 namespace eval webupgrade {
     namespace ensemble create -subcommands {

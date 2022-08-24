@@ -21,9 +21,24 @@ set mqttactions {
 proc mqttinit {} {
     global cfg mqtt signals gui
 
+    switch $cfg(mqtt,version) {
+	3.1 - 3 - MQTTv3.1 {
+	    set protocol 3
+	}
+	3.1.1 - 4 - MQTTv3.1.1 {
+	    set protocol 4
+	}
+	default {
+	    set protocol 5
+	}
+    }
+
+    mqttformat
+
     set mqtt [mqtt new -username $cfg(mqtt,username) \
       -password $cfg(mqtt,password) -keepalive $cfg(mqtt,keepalive) \
-      -retransmit [expr {$cfg(mqtt,retransmit) * 1000}]]
+      -retransmit [expr {$cfg(mqtt,retransmit) * 1000}] \
+      -protocol $protocol -socketcmd [socketcommand $cfg(mqtt,secure)]]
     $mqtt connect $cfg(mqtt,client) $cfg(mqtt,broker) $cfg(mqtt,port)
     $mqtt subscribe $cfg(mqtt,actiontopic)/+ mqttaction
 
@@ -39,127 +54,133 @@ proc mqttinit {} {
     }
 }
 
+proc mqttformat {{init 1}} {
+    global cfg
+    set cmd [list apply {args {mqttformat 0}}]
+    if {$cfg(mqtt,format) ni {json json1 json2 json3}} {
+	if {$init} {
+	    # Take the appropriate action when the format is changed
+	    trace add variable cfg(mqtt,format) write $cmd
+	}
+	return
+    }
+    try {
+	json layout json1 {data} {
+	    # Arrange for multiple values to be published in separate messages
+	    dict with data {}
+	    if {[llength $value] == 0} {
+		return
+	    }
+	    foreach {n t} [lassign $def name type] v [lassign $value val] {
+		set d [dict create def [list $name $type] value $val]
+		$mqtt publish $topic [json build object json1 $d] $qos $retain
+		set name $n
+		set type $t
+		set val $v
+	    }
+	    return [dict create value [list $type $val]]
+	}
+
+	json layout json2 {data} {
+	    # Arrange for multiple values to be published in separate messages
+	    dict with data {}
+	    foreach {n t} [lassign $def name type] v [lassign $value val] {
+		set d [dict create def [list $name $type] value $val]
+		$mqtt publish $topic [json build object json2 $d] $qos $retain
+		set name $n
+		set type $t
+		set val $v
+	    }
+	    set script {}
+	    if {[llength $value]} {
+		if {$name ne ""} {
+		    dict set script name [list string $name]
+		} else {
+		    dict set script name {string arg}
+		    set type string
+		}
+		dict set script type [list string $type]
+		dict set script value [list $type $val]
+	    }
+	    dict set script timestamp {milliseconds}
+	    return $script
+	}
+
+	json layout json3 {data} {
+	    set script {args {} timestamp {milliseconds}}
+	    set args {type {} value {}}
+	    foreach {name type} [dict get $data def] \
+	      value [dict get $data value] {
+		if {$name eq ""} {
+		    set name arg[incr argnum]
+		    set type string
+		}
+		dict set args type [list string $type]
+		dict set args value [list $type $value]
+		dict set script args object::$name [script $args]
+	    }
+	    return $script
+	}
+
+	# Create some object node commands
+	json object args
+	json attribute name
+	json attribute type
+	json attribute value
+	json attribute timestamp
+
+	# Initialization has been done
+	trace remove variable cfg(mqtt,format) write $cmd
+    } trap {TCL PACKAGE UNFOUND} {err info} {
+	# Could not load the required package (tdom). Fall back to raw format
+	set cfg(mqtt,format) raw
+	# Keep the trace needs until switching to json succeeds
+    }
+}
+
 proc mqttsignal {name args} {
     global cfg mqtt signals
     if {!$cfg(mqtt,enable)} return
-    set retain [expr {[llength $args] > 0 && $name ni {error}}]
     set key [lsearch -inline -nocase -exact [dict keys $signals] $name]
+    if {$key ne ""} {
+	set def [dict get $signals $key]
+    } else {
+	set def {"" string}
+    }
+    set topic $cfg(mqtt,eventtopic)/$name
+    set qos $cfg(mqtt,qos)
+    set retain [expr {[llength $args] > 0 && $name ni {error}}]
+    set data [dict create topic $topic def $def value $args qos $qos retain $retain]
+    mqttpub $topic $data $qos $retain
+}
+
+proc mqttmessage {msg} {
+    global cfg
+    set data [dict create def {"" string} value $msg]
+    mqttpub $cfg(mqtt,eventtopic)/Message $data 0
+}
+
+proc mqttpub {topic data {qos 1} {retain 0}} {
+    global cfg mqtt
     switch -- $cfg(mqtt,format) {
 	json - json1 {
-	    set value [mqttjson1 $key $args]
+	    set msg [json build object json1 $data]
 	}
 	json2 {
-	    set value [mqttjson2 $key $args]
+	    set msg [json build object json2 $data]
 	}
 	json3 {
-	    set value [mqttjson3 $key $args]
+	    set msg [json build object json3 $data]
 	}
 	default {
-	    set value [mqttraw $key $args]
+	    set msg [dict get $data value]
 	}
     }
-    $mqtt publish $cfg(mqtt,eventtopic)/$name $value $cfg(mqtt,qos) $retain
-}
-
-proc mqttjsonvalue {type val} {
-    set rc [list [format {"type": "%s"} $type]]
-    switch -- $type {
-	boolean {
-	    lappend rc \
-	      [format {"value": %s} [lindex {true false} [expr {!$val}]]]
-	}
-	float {
-	    lappend rc [format {"value": %.2f} $val]
-	}
-	byte - integer - unsigned {
-	    lappend rc [format {"value": %d} $val]
-	}
-	default {
-	    lappend rc [format {"value": "%s"} $val]
-	}
-    }
-    return $rc
-}
-
-proc mqttjson1 {name data} {
-    global signals
-    if {[llength $data] == 1} {
-	set value [lindex $data 0]
-	if {$name ne ""} {
-	    lassign [dict get $signals $name] key type
-	} else {
-	    set type string
-	}
-	set value [lindex [mqttjsonvalue $type $value] 1]
-    } else {
-	set value ""
-    }
-    return "{$value}"
-}
-
-proc mqttjson2 {name data} {
-    global signals
-    if {[llength $data] == 1} {
-	set value [lindex $data 0]
-	if {$name ne ""} {
-	    lassign [dict get $signals $name] key type
-	    set json [mqttjsonvalue $type $value]
-	} else {
-	    set key arg
-	    set json [mqttjsonvalue string $value]
-	}
-	set json [linsert $json 0 [format {"name": "%s"} $key]]
-    }
-    lappend json [format {"timestamp": %s} [clock milliseconds]]
-    return "{[join $json {, }]}"
-}
-
-proc mqttjson3 {name data} {
-    global signals
-    if {$name ne ""} {
-	set def [dict get $signals $name]
-    } else {
-	set def {}
-    }
-    set parameters {}
-    set argnum 0
-    foreach arg [dict keys $def] val $data {
-	if {$arg eq ""} {
-	    set arg arg[incr argnum]
-	    set type string
-	} else {
-	    set type [dict get $def $arg]
-	}
-	set value [mqttjsonvalue $type $val]
-	lappend parameters [format {"%s": {%s}} $arg [join $value {, }]]
-    }
-    lappend json [format {"args": {%s}} [join $parameters {, }]]
-    lappend json [format {"timestamp": %s} [clock milliseconds]]
-    return "{[join $json {, }]}"
+    $mqtt publish $topic $msg $qos $retain
 }
 
 proc mqttraw {name data} {
     return [join $data ,]
-}
-
-proc mqttmessage {msg} {
-    global cfg mqtt
-    switch -- $cfg(mqtt,format) {
-	json - json1 {
-	    set value [mqttjson1 "" $msg]
-	}
-	json2 {
-	    set value [mqttjson2 "" $msg]
-	}
-	json3 {
-	    set value [mqttjson3 "" $msg]
-	}
-	default {
-	    set value [mqttraw "" $msg]
-	}
-    }
-    $mqtt publish $cfg(mqtt,eventtopic)/Message $value 0
-    
 }
 
 proc mqttaction {topic data args} {
@@ -174,32 +195,27 @@ proc mqttaction {topic data args} {
     if {$cfg(mqtt,format) eq "raw"} {
 	set value $data
     } else {
-	package require json
-	if {[catch {json::json2dict $data} dict]} {
+	if {[catch {dom parse -json $data doc}]} {
 	    # Invalid JSON
 	    return
 	}
 	switch $cfg(mqtt,format) {
 	    json - json1 - json2 {
-		if {[dict exists $dict value]} {
-		    set value [dict get $dict value]
-		} else {
-		    # No value specified
-		    return
-		}
+		set path /value
 	    }
 	    json3 {
-		if {[dict exists $dict $arg value]} {
-		    set value [dict get $dict $arg value]
-		} else {
-		    # No value specified
-		    return
-		}
+		set path /$arg/value
 	    }
 	    default {
 		# Unknown data format
 		return
 	    }
+	}
+	set value [$doc selectNodes string($path)]
+	
+	if {$value eq ""} {
+	    # No value specified
+	    return
 	}
     }
     sercmd $cmd=$value "via MQTT"
