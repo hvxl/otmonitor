@@ -829,6 +829,7 @@ proc output {str {tag ""}} {
 	    catch {close $fd}
 	}
     }
+    return $str
 }
 
 proc untab {str args} {
@@ -2231,6 +2232,17 @@ proc diagnostics {{ver ""}} {
     rename diagnostics {}
     package require diagnostics
     tailcall diagnostics $ver
+}
+
+proc getcaps {} {
+    global message
+    capslog start [array names message]
+}
+
+proc capslog {args} {
+    rename capslog {}
+    package require capslog
+    tailcall capslog {*}$args
 }
 
 if {$firmware eq ""} {

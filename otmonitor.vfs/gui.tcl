@@ -13,9 +13,6 @@ try {
 
 package require matchbox
 
-# Stop the annoying auto-selection of comboboxes
-bind TCombobox <<ComboboxSelected>> {%W selection clear}
-
 include themes.tcl
 
 namespace eval gui {
@@ -28,7 +25,7 @@ namespace eval gui {
 	value		dictionary
     }
     variable widget {} history {} histpos 0
-
+    variable base http://otgw.tclcode.com
     namespace ensemble create -unknown ::gui::passthrough \
       -subcommands {output tvtrace connected scroll}
     
@@ -300,6 +297,8 @@ proc gui::start {} {
     .m.file add separator
     .m.file add command -label "Diagnostics" -state $state \
       -command diagnostics
+    .m.file add command -label "Capability log ..." \
+      -command [namespace code capsdlg]
     .m.file add separator
     .m.file add command -label Quit -command [namespace code finish]
     .m add cascade -label Edit -menu [menu .m.edit -tearoff 0]
@@ -2164,6 +2163,117 @@ proc gui::fork {file} {
     thread::send -async $id [list set mainthread [thread::id]]
 }
 
+proc gui::capsdlg {} {
+    variable capsstatus
+    variable capsvar
+    if {[winfo exists .caps]} {
+	tailcall wm deiconify .caps
+    }
+    package require matchbox
+    toplevel .caps
+    wm title .caps "Capability log"
+    wm transient .caps .
+    place [ttk::frame .caps.bg] -relheight 1 -relwidth 1
+
+    set var [namespace which -variable capsvar]
+    ttk::label .caps.l1 -text "Boiler make and model:"
+    ttk::matchbox .caps.e1 -width 32 -textvariable ${var}(boiler) \
+      -matchcommand [list [namespace which capsmatch] .caps.e1]
+    ttk::label .caps.l2 -text "Thermostat make and model:"
+    ttk::matchbox .caps.e2 -width 32 -textvariable ${var}(thermostat) \
+      -matchcommand [list [namespace which capsmatch] .caps.e2]
+    ttk::label .caps.l3 -text "Email address:"
+    ttk::entrybox .caps.e3 -width 32 -textvariable ${var}(email)
+    set wrap [expr {[winfo reqwidth .caps.l2] + [winfo reqwidth .caps.e2] + 10}]
+    ttk::label .caps.h -wraplength $wrap -anchor w -justify left -text "All\
+      fields are optional. The logfile will automatically be uploaded if you\
+      specify at least a boiler make and model."
+    ttk::frame .caps.buttons
+    ttk::button .caps.buttons.b1 -text Start -command [list gui getcaps .caps]
+    ttk::label .caps.status \
+      -textvariable [namespace which -variable capsstatus]
+    grid .caps.l1 .caps.e1 -sticky ew -padx 5 -pady 5
+    grid .caps.l2 .caps.e2 -sticky ew -padx 5 -pady 5
+    grid .caps.l3 .caps.e3 -sticky ew -padx 5 -pady 5
+    grid .caps.h -columnspan 2 -sticky ew -padx 5 -pady 5
+    grid .caps.buttons - -sticky ew -padx 5 -pady 5
+    grid anchor .caps.buttons center
+    grid .caps.buttons.b1
+    grid [ttk::separator .caps.sep] - -sticky ew -padx 3
+    grid .caps.status - -sticky ew -padx 5 -pady 5
+
+    ::tk::PlaceWindow .caps widget .
+
+    coroutine capscoro capslist .caps.e1 .caps.e2
+}
+
+proc gui::getcaps {w} {
+    ::getcaps
+    # Keep the dialog around while the capslog is running
+    wm protocol $w WM_DELETE_WINDOW [list wm withdraw $w]
+    capslog track [namespace which capsstatus]
+    bind $w <Destroy> {capslog abort}
+}
+
+proc gui::capsstatus {state message} {
+    variable capsstatus [string toupper $message 0 0]
+    if {[winfo exists .caps.buttons.b1]} {
+	if {$state eq "idle"} {
+	    .caps.buttons.b1 configure -text Start \
+	      -command [list gui getcaps .caps]
+	    wm protocol .caps WM_DELETE_WINDOW {}
+	    bind .caps <Destroy> {}
+	} elseif {$state eq "done"} {
+	    set boiler [.caps.e1 get]
+	    if {$boiler ne ""} {
+		variable base
+		set args [list boiler $boiler]
+		set thermostat [.caps.e2 get]
+		if {$thermostat ne ""} {lappend args thermostat $thermostat}
+		set email [.caps.e3 get]
+		if {$email ne ""} {lappend args email $email}
+		capslog upload $base/capslog.cgi {*}$args
+	    } else {
+		tailcall capsstatus idle $message
+	    }
+	} else {
+	    .caps.buttons.b1 configure -text Abort \
+	      -command [list capslog abort]
+	}
+    }
+}
+
+proc gui::capslist {e1 e2} {
+    variable base
+    try {
+	set w [winfo toplevel $e1]
+	tk busy hold $w
+	package require www
+	package require tdom 0.9.3-
+	dom parse -json [www get $base/equipment.php] doc
+	foreach part [$doc childNodes] {
+	    switch [$part nodeName] {
+		boilers {set e $e1}
+		thermostats {set e $e2}
+		default {continue}
+	    }
+	    if {[winfo exists $e]} {
+		$e configure -values [lmap n [$part childNodes] {$n nodeValue}]
+	    }
+	}
+    } finally {
+	if {[winfo exists $w]} {
+	    tk busy forget $w
+	}
+    }
+}
+
+proc gui::capsmatch {e str} {
+    if {$str ne ""} {
+	return [lsearch -all -inline -regexp [$e cget -values] (?qi)$str]
+    }
+}
+
 namespace eval gui {
     if {[catch start]} {
 	puts $errorInfo
@@ -2175,6 +2285,11 @@ namespace eval gui {
 
 interp alias {} fwstatus {} setstatus fwstatus
 
-if {[settings get debug console n] && $tcl_platform(platform) eq "windows"} {
-    bind all <F12> {console show}
+if {$tcl_platform(platform) eq "windows"} {
+    if {[settings get debug console n]} {
+	bind all <F12> {console show}
+    }
+} else {
+    # Fix bad design decisions
+    catch {package require tkfix}
 }
