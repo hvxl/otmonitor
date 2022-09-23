@@ -24,35 +24,13 @@ namespace eval ::ttk::matchbox {
     variable blank [image create photo [namespace current]::blank \
       -width 16 -height 16]
 
-    ttk::style element create clrbutton \
-      image [list $blank {!alternate !readonly !disabled} $clear]
-
-    ttk::style layout TMatchbox {
-	Combobox.field -sticky nswe -children {
-	    Combobox.downarrow -side right -sticky ns 
-	    Combobox.padding -expand 1 -sticky nswe -children {
-		clrbutton -side right
-		Combobox.textarea -sticky nswe
-	    }
-	}
-    }
-
-    ttk::style layout ClrTEntry {
-	Entry.field -sticky nswe -children {
-	    Entry.padding -sticky nswe -children {
-		clrbutton -side right
-		Entry.textarea -sticky nswe
-	    }
-	}
-    }
-
     event add <<Clear>> <Control-u>
 
     proc Motion {w x y} {
 	$w instate {!readonly !disabled} {
 	    set elem [$w identify $x $y]
 	    if {$elem eq "textarea" || \
-	      $elem eq "clrbutton" && [$w instate alternate]} {
+	      $elem eq "TMatchbox.clrbutton" && [$w instate alternate]} {
 		ttk::setCursor $w text
 		return
 	    }
@@ -67,7 +45,8 @@ namespace eval ::ttk::matchbox {
 	    return
 	}
 	set e [$w identify element $x $y]
-	if {$e eq "clrbutton" && [$w instate {!disabled !readonly}]} {
+	if {$e eq "TMatchbox.clrbutton" \
+	  && [$w instate {!disabled !readonly}]} {
 	    focus $w
 	    event generate $w <<Clear>>
 	} elseif {[winfo class $w] eq "TMatchbox"} {
@@ -77,15 +56,66 @@ namespace eval ::ttk::matchbox {
 	}
     }
 
+    proc ThemeInit {} {
+	# Unfortunately there is no `ttk::style layout exists` command
+	if {"TMatchbox.clrbutton" in [ttk::style element names]} return
+
+	variable blank
+	variable clear
+
+	ttk::style element create TMatchbox.clrbutton \
+	  image [list $blank {!alternate !readonly !disabled} $clear] -sticky e
+
+	ttk::style layout TMatchbox {
+	    Combobox.field -sticky nswe -children {
+		Combobox.downarrow -side right -sticky ns 
+		Combobox.padding -expand 1 -sticky nswe -children {
+		    TMatchbox.clrbutton -side right
+		    Combobox.textarea -sticky nswe
+		}
+	    }
+	}
+
+	ttk::style layout ClrTEntry {
+	    Entry.field -sticky nswe -children {
+		Entry.padding -sticky nswe -children {
+		    TMatchbox.clrbutton -side right
+		    Entry.textarea -sticky nswe
+		}
+	    }
+	}
+    }
+
+    proc ReconfigurePopdown {w} {
+	set font [ttk::style lookup TCombobox -font {} TkDefaultFont]
+	set bg [ttk::style lookup TCombobox -fieldbackground {} white]
+	set fg [ttk::style lookup TCombobox -foreground {} black]
+	set selfg [ttk::style lookup TCombobox -selectforeground {} white] 
+	set selbg [ttk::style lookup TCombobox -selectbackground {} darkblue]
+
+	if {[winfo class $w] eq "ComboboxPopdown"} {
+	    set lb $w.f.l
+	} else {
+	    $w configure -background $fg
+	    set lb $w.lb
+	}
+	$lb configure -font $font -foreground $fg -background $bg \
+	  -selectforeground $selfg -selectbackground $selbg
+    }
+
     ::ttk::copyBindings TCombobox TMatchbox
     ::ttk::copyBindings TEntry ClrTEntry
 
     bind TMatchbox <<Clear>> {%W delete 0 end}
     bind TMatchbox <Motion> [list [namespace current]::Motion %W %x %y]
     bind TMatchbox <1> [list [namespace current]::Press %W %x %y]
+    bind TMatchbox <<ThemeChanged>> [list [namespace current]::ThemeInit]
     bind ClrTEntry <<Clear>> {%W delete 0 end}
     bind ClrTEntry <Motion> [list [namespace current]::Motion %W %x %y]
     bind ClrTEntry <1> [list [namespace current]::Press %W %x %y]
+    bind ClrTEntry <<ThemeChanged>> [list [namespace current]::ThemeInit]
+    bind TMatchboxPopdown <<ThemeChanged>> \
+      [list [namespace current]::ReconfigurePopdown %W]
 
     option add *TMatchbox*Listbox.font TkTextFont
     option add *TMatchbox*Listbox.relief flat
@@ -101,6 +131,16 @@ namespace eval ::ttk::matchbox {
 }
 
 ::tk::Megawidget create ::ttk::entrybox {} {
+    constructor {args} {
+	my ThemeInit
+	next {*}$args
+    }
+
+    destructor {
+	my variable options
+	my VarUntrace $options(-textvariable)
+    }
+
     method GetSpecs {} {
 	my variable w
 	if {![winfo exists $w]} {
@@ -124,14 +164,19 @@ namespace eval ::ttk::matchbox {
 	my UpdateIcon
     }
 
+    method VarUntrace {var} {
+	if {$var ne ""} {
+	    set cmd [list [namespace which my] UpdateIcon]
+	    trace remove variable $var write $cmd
+	}
+    }
+
     method VarTrace {{oldvar ""}} {
 	my variable options
-	set cmd [list [namespace which my] UpdateIcon]
-	if {$oldvar ne ""} {
-	    trace remove variable $oldvar write $cmd
-	}
+	my VarUntrace $oldvar
 	set var $options(-textvariable)
 	if {$var ne ""} {
+	    set cmd [list [namespace which my] UpdateIcon]
 	    trace add variable $var write $cmd
 	}
     }
@@ -143,6 +188,8 @@ namespace eval ::ttk::matchbox {
     method UpdateIcon {{var {}} {arg {}} {op command}} {
 	if {$op eq "command"} {
 	    set str [theWidget get]
+	} elseif {[uplevel 1 [list array exists $var]]} {
+	    upvar 1 ${var}($arg) str
 	} else {
 	    upvar 1 $var str
 	}
@@ -198,6 +245,7 @@ namespace eval ::ttk::matchbox {
     forward state theWidget state
     forward validate theWidget validate
     forward xview theWidget xview
+    forward ThemeInit ::ttk::matchbox::ThemeInit
 }
 
 ::tk::Megawidget create ::ttk::matchbox ::ttk::entrybox {
@@ -236,11 +284,9 @@ namespace eval ::ttk::matchbox {
     method Create {} {
 	my variable w listbox matchlist
 	variable str
-	set listbox [toplevel $w.top \
-	  -relief solid -borderwidth 1 -background white]
+	set listbox [toplevel $w.top -relief flat -borderwidth 1]
 	frame $listbox.wf
 	listbox $listbox.lb -width 1 -exportselection 0 \
-	  -selectforeground black -selectbackground #c2e0f5 \
 	  -listvariable [namespace which -variable matchlist] \
 	  -yscrollcommand [list $listbox.sb set]
 	ttk::scrollbar $listbox.sb -command [list $listbox.lb yview]
@@ -250,6 +296,10 @@ namespace eval ::ttk::matchbox {
 	grid $listbox.wf - -row 0
 	grid columnconfigure $listbox $listbox.lb -weight 1
 	wm withdraw $listbox
+	bindtags $listbox [linsert [bindtags $listbox] end-1 TMatchboxPopdown]
+	set popdown [ttk::combobox::PopdownWindow $w]
+	bindtags $popdown [linsert [bindtags $popdown] end-1 TMatchboxPopdown]
+	event generate $listbox <<ThemeChanged>>
 
 	bind $w <Down> [namespace code [list my Arrow down]]
 	bind $w <Up> [namespace code [list my Arrow up]]
@@ -257,6 +307,8 @@ namespace eval ::ttk::matchbox {
 	bind $w <Escape> [namespace code [list my Escape]]
 	bind $listbox.lb <Enter> [list $w configure -cursor ""]
 	bind $listbox.lb <<ListboxSelect>> [namespace code [list my Pick]]
+	# If the listbox steals the focus, give it back to the rightful owner
+	bind $listbox.lb <FocusIn> [list focus $w]
 
 	my VarTrace
 	my UpdateIcon
@@ -339,6 +391,7 @@ namespace eval ::ttk::matchbox {
 	if {[winfo ismapped $listbox]} {
 	    my UnmapListBox
 	    set str [theWidget get]
+	    my UpdateIcon
 	    event generate $w <<MatchSelected>>
 	} else {
 	    event generate $w <<MismatchSelected>>
@@ -353,20 +406,15 @@ namespace eval ::ttk::matchbox {
 
     method Pick {} {
 	my variable w listbox str
-	set str [lmap n [$listbox.lb curselection] {$listbox.lb get $n}]
-	my UnmapListBox
-	theWidget set $str
-	theWidget icursor end
-	theWidget xview moveto 1
-	theWidget validate
-    }
-
-    method selection {args} {
-	# Ttk incorrectly overwrites the primary selection when the user
-	# selects a combobox entry from the popdown list.
-	if {[lindex [info level -1] 0] ne "SelectEntry"} {
-	    return [theWidget selection {*}$args]
+	foreach n [$listbox.lb curselection] {
+	    theWidget set [$listbox.lb get $n]
+	    theWidget icursor end
+	    theWidget xview moveto 1
+	    theWidget validate
+	    my UpdateIcon
+	    break
 	}
+	my UnmapListBox
     }
 
     method set {value} {
@@ -378,6 +426,7 @@ namespace eval ::ttk::matchbox {
     }
 
     forward current theWidget current
+    forward selection theWidget selection
 }
 
 package provide matchbox 1.0
