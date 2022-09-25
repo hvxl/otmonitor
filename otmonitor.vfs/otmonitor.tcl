@@ -526,6 +526,7 @@ proc process {line} {
 	alert watchdogtimer
     } elseif {[scan $line {CS: %f} ctrlsetpt] == 1} {
 	output "[ts]\t$line"
+	response $line
 	after cancel commandexpired
 	if {$ctrlsetpt != 0.0} {
 	    after 62915 commandexpired

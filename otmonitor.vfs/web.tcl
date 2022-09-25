@@ -137,7 +137,7 @@ proc ::wibble::include {name} {
 }
 
 proc ::wibble::zone::userinfo {state} {
-    set details [format "via websocket from %s:%s" \
+    set details [format "via web API from %s:%s" \
       [dict get $state request peerhost] [dict get $state request peerport]]
     if {[dict exists $state authentication user]} {
 	append details ", user: [dict get $state authentication user]"
