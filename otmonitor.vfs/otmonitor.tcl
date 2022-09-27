@@ -1374,6 +1374,15 @@ proc connectcoro {type} {
 	    } elseif {$cfg(connection,type) eq "file"} {
 		set dev [open $cfg(connection,device)]
 		set devtype file
+		# Disable some functionality when processing a log file
+		array set cfg {
+		    logfile,enable	false
+		    datalog,enable	false
+		    email,enable	false
+		    sms,enable		false
+		    mqtt,enable		false
+		    tspeak,enable	false
+		}
 		coroutine otsim filedata [file mtime $cfg(connection,device)]
 	    } elseif {$tcl_platform(platform) eq "windows"} {
 		if {[scan [string toupper $cfg(connection,device)] COM%d num] == 1} {
@@ -1603,6 +1612,10 @@ proc iac {flag option} {
 
 proc filedata {endtime} {
     global dev start
+    # Check if the file is gzipped
+    binary scan [read $dev 2] Su* magic
+    seek $dev 0
+    if {$magic == 0x1f8b} {zlib push gunzip $dev}
     lassign [fileanal] def tsfmt
     set base [clock add $endtime -6 hours]
     set last 0
@@ -1613,6 +1626,11 @@ proc filedata {endtime} {
 	}
 	try {
 	    set sec [clock scan $ts -base $base -format $tsfmt]
+	    if {$sec < $last && [clock format $sec -format %R] eq "00:00"} {
+		# Crossed midnight
+		set base [clock add $base 1 day]
+		set sec [clock scan $ts -base $base -format $tsfmt]
+	    }
 	    set us [expr {$sec * 1000000 + [scan $frac %d]}]
 	    if {$start > $sec} {set start $sec}
 	    if {$sec > $last + 60} {
@@ -1639,7 +1657,14 @@ proc fileanal {} {
     # Read a couple of lines
     set re {\m[ABRT][0-9A-F]{8}\M}
     set lines [lsearch -all -inline -regexp [split [read $dev 16384] \n] $re]
-    seek $dev 0
+    if {[dict exists [chan configure $dev] -header filename]} {
+	# Can't seek inside a gzipped stream
+	chan pop $dev
+	seek $dev 0
+	zlib push gunzip $dev
+    } else {
+	seek $dev 0
+    }
     # Check how many times the pattern occurs on a specific position
     foreach n $lines {
 	regexp -indices $re $n x
