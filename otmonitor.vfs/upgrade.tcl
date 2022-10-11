@@ -654,8 +654,8 @@ proc upgrade::eeprom {version} {
 	4.0a0 4.0a1 4.0a2 4.0a3 4.0a4 4.0a5 4.0a6 4.0a7 4.0a8
 	4.0a9 4.0a9.1 4.0a10 4.0a11 4.0a11.1 4.0a11.2 4.0a12
     }
-    if {$version == 0 || \
-      $version ni $supported && ![package vsatisfies $version 4.0b0-6.2]} {
+    if {$version ni $supported && \
+      ![package vsatisfies $version 4.0b0-5.5 6.0-6.3]} {
 	return {}
     }
     set rc {
@@ -683,6 +683,14 @@ proc upgrade::eeprom {version} {
 	Configuration {
 	    address	0x0e
 	    size	1
+	}
+	DHWSetpoint {
+	    address	0x0f
+	    size	2
+	}
+	MaxCHSetpoint {
+	    address	0x11
+	    size	2
 	}
 	UnknownFlags {
 	    address	0xd0
@@ -757,6 +765,11 @@ proc upgrade::eeprom {version} {
 	dict set rc Configuration mask 0x30
     }
 
+    # MaxCHSetpoint and DHWSetpoint were introduced in firmware 5.5 and 6.2
+    if {![package vsatisfies $version 5.5 6.2-]} {
+	dict unset rc DHWSetpoint
+	dict unset rc MaxCHSetpoint
+    }
     return $rc
 }
 

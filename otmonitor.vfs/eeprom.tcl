@@ -8,7 +8,7 @@ proc gui::eeprom::gui {w} {
     toplevel $w.set
     wm transient $w.set $w
     wm title $w.set "Transferred EEPROM settings"
-    text $w.set.t -width 60 -height 18 -relief flat -highlightthickness 0 \
+    text $w.set.t -width 60 -height 20 -relief flat -highlightthickness 0 \
       -cursor "" -font TkDefaultFont -wrap word
     ttk::button $w.set.b1 -text Close -command [list destroy $w.set]
     menu $w.set.t.menu -tearoff 0
@@ -19,8 +19,8 @@ proc gui::eeprom::gui {w} {
     pack $w.set.b1 -side bottom -pady 4
     pack $w.set.t -fill both -expand 1 -padx 4 -pady 4
     foreach n {
-	SavedSettings Configuration FunctionGPIO AwaySetpoint
-	FunctionLED ThermostatModel AlternativeCmd UnknownFlags
+	Configuration ThermostatModel AwaySetpoint DHWSetpoint MaxCHSetpoint
+	SavedSettings FunctionLED FunctionGPIO AlternativeCmd UnknownFlags
     } {
 	if {[dict exists $eeprom $n value]} {
 	    [string tolower $n] $w.set.t [dict get $eeprom $n]
@@ -70,7 +70,27 @@ proc gui::eeprom::functiongpio {w data} {
 
 proc gui::eeprom::awaysetpoint {w data} {
     lassign [dict get $data value] unit frac
-    $w insert end "Away setpoint:\t[format %.2f [expr {$unit + $frac / 256.}]]\n"
+    $w insert end "Away setpoint:\t[float [expr {$unit * 256 + $frac}]]\n"
+}
+
+proc gui::eeprom::dhwsetpoint {w data} {
+    lassign [dict get $data value] unit frac
+    if {$unit} {
+	set value [float [expr {$unit * 256 + $frac}]]
+    } else {
+	set value --
+    }
+    $w insert end "DHW setpoint:\t$value\n"
+}
+
+proc gui::eeprom::maxchsetpoint {w data} {
+    lassign [dict get $data value] unit frac
+    if {$unit} {
+	set value [float [expr {$unit * 256 + $frac}]]
+    } else {
+	set value --
+    }
+    $w insert end "Max CH setpoint:\t$value\n"
 }
 
 proc gui::eeprom::functionled {w data} {
@@ -92,6 +112,8 @@ proc gui::eeprom::thermostatmodel {w data} {
 	set model iSense
     } elseif {$val & 0x20} {
 	set model "Celcia 20"
+    } elseif {$val & 0x10} {
+	set model "Standard"
     } else {
 	set model Default
     }

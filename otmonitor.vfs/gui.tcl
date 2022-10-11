@@ -2177,13 +2177,13 @@ proc gui::capsdlg {} {
 
     set var [namespace which -variable capsvar]
     ttk::label .caps.l1 -text "Boiler make and model:"
-    ttk::matchbox .caps.e1 -width 32 -textvariable ${var}(boiler) \
+    ttk::matchbox .caps.e1 -width 40 -textvariable ${var}(boiler) \
       -matchcommand [list [namespace which capsmatch] .caps.e1]
     ttk::label .caps.l2 -text "Thermostat make and model:"
-    ttk::matchbox .caps.e2 -width 32 -textvariable ${var}(thermostat) \
+    ttk::matchbox .caps.e2 -width 40 -textvariable ${var}(thermostat) \
       -matchcommand [list [namespace which capsmatch] .caps.e2]
     ttk::label .caps.l3 -text "Email address:"
-    ttk::entrybox .caps.e3 -width 32 -textvariable ${var}(email)
+    ttk::entrybox .caps.e3 -width 40 -textvariable ${var}(email)
     set wrap [expr {[winfo reqwidth .caps.l2] + [winfo reqwidth .caps.e2] + 10}]
     ttk::label .caps.h -wraplength $wrap -anchor w -justify left -text "All\
       fields are optional. The logfile will automatically be uploaded if you\
@@ -2203,6 +2203,7 @@ proc gui::capsdlg {} {
     grid .caps.status - -sticky ew -padx 5 -pady 5
 
     ::tk::PlaceWindow .caps widget .
+    wm resizable .caps 0 0
 
     coroutine capscoro capslist .caps.e1 .caps.e2
 }
