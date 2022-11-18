@@ -53,6 +53,11 @@ proc capslog::stop {{abort 0} {msg "data collection aborted"}} {
 	set file ""
 	status idle $msg
     } else {
+	# On windows temp files are created with a .TMP extension
+	if {[file extension $file] ne ".gz"} {
+	    set name [file rootname $file].gz
+	    if {![catch {file rename $file $name}]} {set file $name}
+	}
 	status done "the log was saved as: [file nativename $file]"
     }
 }

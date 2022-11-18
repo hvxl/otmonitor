@@ -451,8 +451,9 @@ proc response {str} {
     }
 }
 
-proc process {line} {
+proc process {line {us ""}} {
     global fwvariant fwversion cfg clients
+    if {$us eq ""} {set us [clock microseconds]}
     if {$cfg(server,relay)} {
 	dict for {client fd} $clients {
 	    if {[catch {puts $fd $line}]} {
@@ -462,7 +463,7 @@ proc process {line} {
 	}
     }
     if {[scan $line {%1[ABRT]%1x%1x%2x%4x} src type res id data] == 5} {
-	otmessage [clock microseconds] $line [expr {$type & 7}] $id $data
+	otmessage $us $line [expr {$type & 7}] $id $data
 	if {$fwversion eq "0" && $src eq "B"} {
 	    global count
 	    # Stop after a few attempts, in case the report format changes
@@ -473,7 +474,7 @@ proc process {line} {
 	    }
 	}
     } elseif {[scan $line {Error %2x} errno] == 1} {
-	output "[ts]\t$line" error
+	output "[ts $us]\t$line" error
 	global error
 	incr error($errno)
 	signal error $errno
@@ -481,7 +482,7 @@ proc process {line} {
 	set fwvariant diagnose
 	set fwversion $ver
 	gui diagnostics $ver
-	output "[ts]\t$line"
+	output "[ts $us]\t$line"
     } elseif {[set x [string first "OpenTherm Interface " $line]] >= 0} {
 	if {[scan [string range $line $x end] {%*s %*s %s} ver] == 1} {
 	    # Make sure a valid version number was found
@@ -490,7 +491,7 @@ proc process {line} {
 		set fwversion $ver
 	    }
 	}
-	output "[ts]\t$line"
+	output "[ts $us]\t$line"
 	response $line
     } elseif {[set x [string first "OpenTherm Gateway " $line]] >= 0} {
 	if {$x == 0 || [string index $line [expr {$x - 1}]] ne "="} {
@@ -502,7 +503,7 @@ proc process {line} {
 	} else {
 	    set reset 0
 	}
-	output "[ts]\t$line"
+	output "[ts $us]\t$line"
 	if {[scan [string range $line $x end] {%*s %*s %s} gwver] == 1} {
 	    # Make sure a valid version number was found
 	    if {![catch {package vcompare $gwver $gwver}]} {
@@ -522,10 +523,10 @@ proc process {line} {
 	}
 	response $line
     } elseif {[string match {*WDT reset!*} $line]} {
-	output "[ts]\t$line"
+	output "[ts $us]\t$line"
 	alert watchdogtimer
     } elseif {[scan $line {CS: %f} ctrlsetpt] == 1} {
-	output "[ts]\t$line"
+	output "[ts $us]\t$line"
 	response $line
 	after cancel commandexpired
 	if {$ctrlsetpt != 0.0} {
@@ -533,7 +534,7 @@ proc process {line} {
 	}
     } else {
 	# Filter out non-printable characters
-	output "[ts]\t[regsub -all {[\0-\x1f]} $line {}]"
+	output "[ts $us]\t[regsub -all {[\0-\x1f]} $line {}]"
 	response $line
 	switch -- $line {
 	    "Thermostat disconnected" {
@@ -1621,8 +1622,9 @@ proc filedata {endtime} {
     set last 0
     while {[gets $dev line] != -1} {
 	if {[binary scan $line $def ts frac otmsg] < 3} continue
-	if {[scan $otmsg {%1[ABRT]%1x0%2x%4x%n} src type id data end] != 5} {
-	    continue
+	if {[scan $otmsg {%1[ABRT]%7x%x} src x7 x1] == 3} {
+	    # Strip any previous translation of the message
+	    set otmsg [string range $otmsg 0 8]
 	}
 	try {
 	    set sec [clock scan $ts -base $base -format $tsfmt]
@@ -1640,7 +1642,7 @@ proc filedata {endtime} {
 		after 0 [list after idle [info coroutine]]
 		yield
 	    }
-	    otmessage $us $otmsg [expr {$type & 7}] $id $data
+	    process $otmsg $us
 	} on error err {
 	    puts "$line: $err"
 	}
@@ -1676,31 +1678,31 @@ proc fileanal {} {
     switch -- $pos {
 	16 {
 	    # 17:06:07.297356
-	    return [list a8xa6xa9 %T]
+	    return [list a8xa6xa* %T]
 	}
 	17 {
 	    # 00:01:24.385959
-	    return [list a8xa6x2a9 %T]
+	    return [list a8xa6x2a* %T]
 	}
 	18 {
 	    # 1387251888.153641
-	    return [list a10xa6xa9 %s]
+	    return [list a10xa6xa* %s]
 	}
 	21 {
 	    # 1387251888.153641352
-	    return [list a10xa9xa9 %s]
+	    return [list a10xa9xa* %s]
 	}
 	22 {
 	    # 20131214 07:43:28.006
-	    return [list a17xa3xa9 {%Y%m%d %T}]
+	    return [list a17xa3xa* {%Y%m%d %T}]
 	}
 	23 {
 	    # 20131217-074805.135096
-	    return [list a15xa6xa9 %Y%m%d-%H%M%S]
+	    return [list a15xa6xa* %Y%m%d-%H%M%S]
 	}
 	26 {
 	    # 20131217-074805.135096813
-	    return [list a15xa9xa9 %Y%m%d-%H%M%S]
+	    return [list a15xa9xa* %Y%m%d-%H%M%S]
 	}
     }
 }
