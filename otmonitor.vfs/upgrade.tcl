@@ -655,7 +655,7 @@ proc upgrade::eeprom {version} {
 	4.0a9 4.0a9.1 4.0a10 4.0a11 4.0a11.1 4.0a11.2 4.0a12
     }
     if {$version ni $supported && \
-      ![package vsatisfies $version 4.0b0-5.5 6.0-6.3]} {
+      ![package vsatisfies $version 4.0b0-5.7 6.0-6.4]} {
 	return {}
     }
     set rc {
@@ -683,6 +683,7 @@ proc upgrade::eeprom {version} {
 	Configuration {
 	    address	0x0e
 	    size	1
+	    mask	0x3d
 	}
 	DHWSetpoint {
 	    address	0x0f
@@ -763,6 +764,9 @@ proc upgrade::eeprom {version} {
     } elseif {![package vsatisfies $version 4.2.8-]} {
 	# In firmware 4.2.7, there may be irrelevant stray bits
 	dict set rc Configuration mask 0x30
+    } elseif {![package vsatisfies $version 6.3-]} {
+	# SummerMode was added in firmware 6.3
+	dict set rc Configuration mask 0x35
     }
 
     # MaxCHSetpoint and DHWSetpoint were introduced in firmware 5.5 and 6.2
@@ -770,6 +774,7 @@ proc upgrade::eeprom {version} {
 	dict unset rc DHWSetpoint
 	dict unset rc MaxCHSetpoint
     }
+
     return $rc
 }
 

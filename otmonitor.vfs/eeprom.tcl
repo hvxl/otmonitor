@@ -8,7 +8,7 @@ proc gui::eeprom::gui {w} {
     toplevel $w.set
     wm transient $w.set $w
     wm title $w.set "Transferred EEPROM settings"
-    text $w.set.t -width 60 -height 20 -relief flat -highlightthickness 0 \
+    text $w.set.t -width 60 -height 16 -relief flat -highlightthickness 0 \
       -cursor "" -font TkDefaultFont -wrap word
     ttk::button $w.set.b1 -text Close -command [list destroy $w.set]
     menu $w.set.t.menu -tearoff 0
@@ -39,7 +39,14 @@ proc gui::eeprom::gui {w} {
     $w.set.t tag configure wrap -lmargin2 $tab
     $w.set.t tag add wrap 1.0 end
 
+    lassign [split [$w.set.t index end] .] height
+    $w.set.t configure -height $height
+
     bind $w.set.t <3> [list tk_popup $w.set.t.menu %X %Y]
+}
+
+proc gui::eeprom::bool {bool {true On} {false Off}} {
+    return [if {$bool} {set true} {set false}]
 }
 
 proc gui::eeprom::savedsettings {w data} {
@@ -47,8 +54,8 @@ proc gui::eeprom::savedsettings {w data} {
     set ref [expr {voltref($val)}]
     set volt [expr {voltage($ref)}]
     $w insert end "Reference voltage:\t[format %d=%.3fV $ref $volt]\n"
-    $w insert end "Ignore transitions:\t[expr {($val & 0x20) != 0}]\n"
-    $w insert end "Override high byte:\t[expr {($val & 0x40) != 0}]\n"
+    $w insert end "Ignore transitions:\t[bool [expr {$val & 0x20}]]\n"
+    $w insert end "Override high byte:\t[bool [expr {$val & 0x40}]]\n"
 }
 
 proc gui::eeprom::functiongpio {w data} {
@@ -115,7 +122,7 @@ proc gui::eeprom::thermostatmodel {w data} {
     } elseif {$val & 0x10} {
 	set model "Standard"
     } else {
-	set model Default
+	set model "Auto detect"
     }
     $w insert end "Thermostat model:\t$model\n"
 }
@@ -135,17 +142,25 @@ proc gui::eeprom::configuration {w data} {
     set val [dict get $data value]
     set mask [if {[dict exists $data mask]} {dict get $data mask} {expr 0xff}]
 
-    set gwmodes {Monitor Gateway}
     set dhwmodes {
 	"Comfort mode"
 	"Economy mode"
 	"Thermostat controlled"
     }
+    set dtsfuncs {"Return water temperature" "Outside temperature"}
     set dhw [expr {$val & 0x10 ? !($val & 0x20) : 2}]
     # Only report the operating mode if it was transferred.
     if {$mask & 1} {
-	set gw [expr {!($val & 1)}]
-	$w insert end "Operating mode:\t[lindex $gwmodes $gw]\n"
+	set gw [expr {$val & 1}]
+	$w insert end "Operating mode:\t[bool $gw Monitor Gateway]\n"
     }
     $w insert end "Comfort setting:\t[lindex $dhwmodes $dhw]\n"
+    if {$mask & 4} {
+	set func [expr {$val & 4}]
+	$w insert end "Temperature sensor:\t[bool $func {*}$dtsfuncs]\n"
+    }
+    if {$mask & 8} {
+	set mode [expr {$val & 8}]
+	$w insert end "Force summer mode:\t[bool $mode]\n"
+    }
 }
