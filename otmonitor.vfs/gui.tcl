@@ -343,8 +343,8 @@ proc gui::start {} {
     .m.help add command -label "About Opentherm Monitor" \
       -command [namespace code about]
 
+    bind .bar.con <1> [namespace code connection]
     if {$state eq "normal"} {
-	bind .bar.con <1> [namespace code connection]
 	bind all <F2> [namespace code [list configdlg thermostat]]
 	bind all <F3> [namespace code [list configdlg heater]]
 	bind all <F4> [namespace code [list configdlg io]]

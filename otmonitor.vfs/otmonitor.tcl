@@ -1612,7 +1612,8 @@ proc iac {flag option} {
 }
 
 proc filedata {endtime} {
-    global dev start
+    global dev start connected
+    connected true
     # Check if the file is gzipped
     binary scan [read $dev 2] Su* magic
     seek $dev 0
@@ -1620,7 +1621,7 @@ proc filedata {endtime} {
     lassign [fileanal] def tsfmt
     set base [clock add $endtime -6 hours]
     set last 0
-    while {[gets $dev line] != -1} {
+    while {$connected && [gets $dev line] != -1} {
 	if {[binary scan $line $def ts frac otmsg] < 3} continue
 	if {[scan $otmsg {%1[ABRT]%7x%x} src x7 x1] == 3} {
 	    # Strip any previous translation of the message
