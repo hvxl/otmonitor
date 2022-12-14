@@ -66,6 +66,7 @@ proc mqttformat {{init 1}} {
     }
     try {
 	json layout json1 {data} {
+	    global mqtt
 	    # Arrange for multiple values to be published in separate messages
 	    dict with data {}
 	    if {[llength $value] == 0} {
@@ -82,6 +83,7 @@ proc mqttformat {{init 1}} {
 	}
 
 	json layout json2 {data} {
+	    global mqtt
 	    # Arrange for multiple values to be published in separate messages
 	    dict with data {}
 	    foreach {n t} [lassign $def name type] v [lassign $value val] {
@@ -162,21 +164,25 @@ proc mqttmessage {msg} {
 
 proc mqttpub {topic data {qos 1} {retain 0}} {
     global cfg mqtt
-    switch -- $cfg(mqtt,format) {
-	json - json1 {
-	    set msg [json build object json1 $data]
+    try {
+	switch -- $cfg(mqtt,format) {
+	    json - json1 {
+		set msg [json build object json1 $data]
+	    }
+	    json2 {
+		set msg [json build object json2 $data]
+	    }
+	    json3 {
+		set msg [json build object json3 $data]
+	    }
+	    default {
+		set msg [dict get $data value]
+	    }
 	}
-	json2 {
-	    set msg [json build object json2 $data]
-	}
-	json3 {
-	    set msg [json build object json3 $data]
-	}
-	default {
-	    set msg [dict get $data value]
-	}
+	$mqtt publish $topic $msg $qos $retain
+    } on error {err info} {
+	puts stderr [dict get $info -errorinfo]
     }
-    $mqtt publish $topic $msg $qos $retain
 }
 
 proc mqttraw {name data} {

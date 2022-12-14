@@ -462,7 +462,8 @@ proc process {line {us ""}} {
 	    }
 	}
     }
-    if {[scan $line {%1[ABRT]%1x%1x%2x%4x} src type res id data] == 5} {
+    if {[scan $line {%1[ABRT]%1x%1x%2x%4x%n%c} src type res id data pos ch] == 6 \
+      && $pos == 9} {
 	otmessage $us $line [expr {$type & 7}] $id $data
 	if {$fwversion eq "0" && $src eq "B"} {
 	    global count
@@ -1547,7 +1548,7 @@ proc cancel {} {
 	if {[lindex $sercmd 0 2] < $now} {
 	    set sercmd [lassign $sercmd rec]
 	    lassign $rec cmd coro ms
-	    $coro timeout
+	    catch {$coro timeout}
 	} else {
 	    incr i
 	}
