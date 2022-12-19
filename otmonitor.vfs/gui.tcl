@@ -1639,6 +1639,9 @@ proc gui::cfglogging {w} {
     ttk::checkbutton $w.c4 -text "Include message ID" \
       -variable cfg(view,messageid) -onvalue true -offvalue false
     pack $w.c4 -fill x -side top
+    ttk::checkbutton $w.c5 -text "Resume normal logging after a summary report" \
+      -variable cfg(view,resumelog) -onvalue true -offvalue false
+    pack $w.c5 -fill x -side top
 
     ttk::checkbutton $w.c2 -text "Logfile" \
       -variable cfg(logfile,enable) -onvalue true -offvalue false

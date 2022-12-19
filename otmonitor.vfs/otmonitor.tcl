@@ -25,6 +25,7 @@ set userauth {{} {mtime 0}}
 set signalproc {}
 set clients {}
 set connected 0
+set capsbusy 0
 
 # Allow users to override the built-in pages
 lappend docpath [file join [file dirname $starkit::topdir] html]
@@ -452,7 +453,7 @@ proc response {str} {
 }
 
 proc process {line {us ""}} {
-    global fwvariant fwversion cfg clients
+    global fwvariant fwversion cfg clients capsbusy
     if {$us eq ""} {set us [clock microseconds]}
     if {$cfg(server,relay)} {
 	dict for {client fd} $clients {
@@ -479,6 +480,31 @@ proc process {line {us ""}} {
 	global error
 	incr error($errno)
 	signal error $errno
+    } elseif {[string length $line] > 120} {
+	output "[ts $us]\t$line"
+	set psdata [split $line ,]
+	if {[llength $psdata] == 34} {
+	    # PS layout of version 5.X and later
+	    set psmsgs {
+		0 1 6 7 8 14 15 16 17 18 19 23 24 25 26 27 28 31 33
+		48 49 56 57 70 71 77 116 117 118 119 120 121 122 123
+	    }
+	} elseif {[llength $psdata] == 25} {
+	    # PS layout before version 5.X
+	    set psmsgs {
+		0 1 6 14 15 16 17 18 24 25 26 27 28
+		48 49 56 57 116 117 118 119 120 121 122 123
+	    }
+	} else {
+	    # Unknown data
+	    return
+	}
+	foreach n $psmsgs v $psdata {
+	    psdata $n $v
+	}
+	if {$cfg(view,resumelog) && !$capsbusy} {
+	    sercmd PS=0
+	}
     } elseif {[scan $line {Opentherm gateway diagnostics - Version %s} ver] == 1} {
 	set fwvariant diagnose
 	set fwversion $ver
@@ -668,6 +694,55 @@ proc learn {args} {
     # Ask the questions to obtain the missing knowledge
     foreach n $cmds {
 	sercmd $n
+    }
+}
+
+proc psdata {num value} {
+    global special gui
+    switch $num {
+	0 - 6 - 70 {
+	    if {[scan $value %b/%b msb lsb] != 2} return
+	    set data [list $msb $lsb]
+	}
+	15 - 48 - 49 {
+	    if {[scan $value %d/%d msb lsb] != 2} return
+	    if {$msb == 0 && $lsb == 0} return
+	    set data [list $msb $lsb]
+	}
+	default {
+	    if {[string is integer $value]} {
+		set data $value
+		if {$value == 0 && $num == 33} return
+	    } elseif {[string is double $value]} {
+		if {$value == 0} {
+		    if {$num in {16 18 23 24 25 26 28 31 56 57}} {
+			# These values are not expected to be 0
+			return
+		    }
+		    if {$num == 27} {
+			if {![info exists gui(outside)]} return
+		    }
+		    if {$num == 8} {
+			if {![info exists gui(boilertemp2)]} return
+		    }
+		}
+		set data [expr {round(256 * $value)}]
+	    } else {
+		return
+	    }
+	}
+    }
+    foreach {n cmd} [array get special [format {[01],%d} $num]] {
+	if {[coroutine specialcoro {*}$cmd $data]} {
+	    specialcoro force
+	}
+	break
+    }
+    foreach {n cmd} [array get special [format {[45],%d} $num]] {
+	if {[coroutine specialcoro {*}$cmd $data]} {
+	    specialcoro force
+	}
+	break
     }
 }
 
@@ -2090,6 +2165,7 @@ array set cfg {
     view,order		increasing
     view,bitflags	false
     view,messageid	false
+    view,resumelog	false
     datalog,file	otdata.txt
     datalog,enable	false
     datalog,append	false
@@ -2267,6 +2343,18 @@ proc diagnostics {{ver ""}} {
 proc getcaps {} {
     global message
     capslog start [array names message]
+    capslog track capsstatus
+}
+
+proc capsstatus {state message} {
+    switch $state {
+	init {
+	    variable capsbusy 1
+	}
+	idle - done {
+	    variable capsbusy 0
+	}
+    }
 }
 
 proc capslog {args} {

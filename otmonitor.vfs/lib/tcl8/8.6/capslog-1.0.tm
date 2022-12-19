@@ -19,7 +19,7 @@ proc capslog::start {{list {}}} {
     variable msg
     variable state
     variable count 0
-    if {$state ne "idle"} {stop 1}
+    if {$state ni {idle done}} {stop 1}
     variable mode ""
     variable cleanup {}
     variable cmd [namespace which output]
