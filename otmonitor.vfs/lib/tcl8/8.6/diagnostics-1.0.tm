@@ -1,6 +1,7 @@
 namespace eval diag {
     variable fileevent ""
     namespace export diagnostics
+    namespace upvar :: dev fd
 
     # Make sure the cursor doesn't move
     foreach n {
@@ -11,11 +12,14 @@ namespace eval diag {
 }
 
 proc diag::diagnostics {{version ""}} {
-    global dev
+    variable fd
     variable text
-    if {[info exists dev]} {
-	variable fileevent [fileevent $dev readable]
-	fileevent $dev readable [list [namespace which receive] $dev]
+    if {[info exists fd]} {
+	variable fileevent [fileevent $fd readable]
+	fileevent $fd readable [list [namespace which receive] $fd]
+    }
+    if {[winfo exists .diag]} {
+	tailcall raise .diag
     }
     toplevel .diag
     place [ttk::frame .diag.bg] -relwidth 1 -relheight 1
@@ -29,9 +33,7 @@ proc diag::diagnostics {{version ""}} {
     ttk::scrollbar .diag.f.vs -command [list $text yview]
     $text configure -yscrollcommand {.diag.f.vs set}
     bindtags $text [list $text Diag Text [winfo toplevel $text] all]
-    if {[info exists dev]} {
-	bind $text <Key> [list [namespace which keypress] $dev %A]
-    }
+    bind $text <Key> [list [namespace which keypress] %A]
     # Allow selecting and copying the text
     bind $text <<Copy>> {# Fall through}
     bind $text <<SelectAll>> {# Fall through}
@@ -44,7 +46,7 @@ proc diag::diagnostics {{version ""}} {
 	$text insert end "Opentherm gateway diagnostics - Version $version\n"
     } else {
 	wm title .diag "Diagnostics - requires special firmware"
-	if {[info exists dev]} {puts $dev ""}
+	if {[info exists fd]} {puts $fd ""}
     }
     $text tag configure bad -foreground red
     $text tag configure note -foreground blue
@@ -57,7 +59,7 @@ proc diag::diagnostics {{version ""}} {
 proc diag::receive {fd} {
     variable text
     if {[eof $fd]} {
-	close $fd
+	connect reconnect
 	return
     }
     set rec [lassign [split [read $fd] \b] str]
@@ -140,8 +142,9 @@ proc diag::timings {str} {
     }
 }
 
-proc diag::keypress {fd char} {
-    if {$char ne ""} {
+proc diag::keypress {char} {
+    variable fd
+    if {$char ne "" && [info exists fd]} {
 	puts -nonewline $fd $char
 	flush $fd
     }
@@ -155,10 +158,10 @@ proc diag::cursor {w} {
 }
 
 proc diag::finish {} {
-    global dev
+    variable fd
     variable fileevent
-    if {[info exists dev] && $dev in [chan names]} {
-	fileevent $dev readable $fileevent
+    if {[info exists fd] && $fd in [chan names]} {
+	fileevent $fd readable $fileevent
     }
 }
 
