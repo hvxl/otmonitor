@@ -24,6 +24,79 @@ namespace eval gui {
 	frequency	integer
 	value		dictionary
     }
+    variable statuscfg
+    set statuscfg(ch1) {
+	flame chmode chenable dhwmode dhwenable diag fault {}
+	outside roomtemp setpoint override modulation maxmod pressure {}
+	boilertemp returntemp controlsp chwsetpoint dhwtemp dhwsetpoint faultcode
+    }
+    set statuscfg(ch2) {
+	ch2mode ch2enable {}
+	roomtemp2 setpoint2 {}
+	boilertemp2 controlsp2 dhwtemp2
+    }
+    variable statusdef {
+	airpresfault	{statusflag "Air pressure fault"}
+	boilertemp	{statusvalue "Boiler water temperature"}
+	boilertemp2	{statusvalue "Boiler water temperature" 2}
+	chbh		{statusvalue "Central heating burner hours"}
+	chbs		{statusvalue "Central heating burner starts"}
+	ch2		{statusflag "Central heating circuit" 2}
+	chenable	{statusflag "Central heating enable"}
+	ch2enable	{statusflag "Central heating enable" 2}
+	chmode		{statusflag "Central heating mode"}
+	ch2mode		{statusflag "Central heating mode" 2}
+	chph		{statusvalue "Central heating pump hours"}
+	chps		{statusvalue "Central heating pump starts"}
+	pressure	{statusvalue "CH water pressure"}
+	controlsp	{statusvalue "Control setpoint"}
+	controlsp2	{statusvalue "Control setpoint" 2}
+	cooling		{statusflag "Cooling"}
+	coolingenable	{statusflag "Cooling enable"}
+	coolingstatus	{statusflag "Cooling status"}
+	dhwblock	{statusflag "DHW blocking"}
+	dhwflowrate	{statusvalue "DHW flow rate"}
+	dhwsetpoint	{statusvalue "DHW setpoint"}
+	dhwtemp		{statusvalue "DHW temperature"}
+	dhwtemp2	{statusvalue "DHW temperature" 2}
+	dhw		{statusflag "Domestic hot water"}
+	dhwbh		{statusvalue "Domestic hot water burner hours"}
+	dhwbs		{statusvalue "Domestic hot water burner starts"}
+	dhwenable	{statusflag "Domestic hot water enable"}
+	dhwmode		{statusflag "Domestic hot water mode"}
+	dhwph		{statusvalue "Domestic hot water pump hours"}
+	dhwps		{statusvalue "Domestic hot water pump starts"}
+	dhwstorage	{statusflag "Domestic hot water storage tank"}
+	diag		{statusflag "Diagnostic indication"}
+	electricity	{statusflag "Electricity production"}
+	exhausttemp	{statusvalue "Exhaust temperature"}
+	fault		{statusflag "Fault indication"}
+	flame		{statusflag "Flame status"}
+	flamefault	{statusflag "Gas/flame fault"}
+	heatcool	{statusflag "Heat/cool switching by slave"}
+	lockoutreset	{statusflag "Lockout-reset"}
+	lowpressure	{statusflag "Low water pressure"}
+	faultcode	{statusvalue "OEM fault code"}
+	otcstate	{statusflag "OTC active"}
+	outside		{statusvalue "Outside temperature"}
+	pumpcontrol	{statusflag "Master pump control"}
+	chwsetpoint	{statusvalue "Max CH water setpoint"}
+	maxmod		{statusvalue "Max relative modulation level"}
+	ctrltype	{statusflag "Modulating control"}
+	remotefill	{statusflag "No remote water filling"}
+	setpoint	{statusvalue "Room setpoint"}
+	setpoint2	{statusvalue "Room setpoint" 2}
+	roomtemp	{statusvalue "Room temperature"}
+	roomtemp2	{statusvalue "Room temperature" 2}
+	override	{statusvalue "Remote override room setpoint"}
+	modulation	{statusvalue "Relative modulation level"}
+	returntemp	{statusvalue "Return water temperature"}
+	service		{statusflag "Service request"}
+	dstmode		{statusflag "Summer/winter mode"}
+	overtemp	{statusflag "Water over-temperature"}
+	deltatemp	{statusvalue "Water temperature difference"}
+    }
+
     variable widget {} history {} histpos 0
     variable base http://otgw.tclcode.com
     namespace ensemble create -unknown ::gui::passthrough \
@@ -89,9 +162,122 @@ proc gui::imglist {fn} {
     return [list [img $fn] disabled [img $fn 1]]
 }
 
+proc gui::statusflag {f col row var text} {
+    set w $f.$var
+    if {![winfo exists $w]} {
+	ttk::checkbutton $w -class TLabel -style Indicator.TCheckbutton \
+	  -variable gui($var) -takefocus 0 -text "$text "
+	bindtags $w [linsert [bindtags $w] 2 .ch1status]
+    }
+    set col [expr {$col * 3}]
+    grid $w -row $row -column $col -columnspan 2 -sticky we -padx 2 -pady 1
+    return $w
+}
+
+proc gui::statusvalue {f col row var text} {
+    set w $f.$var
+    if {![winfo exists $w]} {
+	ttk::label $w-label -text $text
+	ttk::label $w -textvariable gui($var) -anchor e -width 6
+	bind $w <Destroy> [list destroy $w-label]
+	bindtags $w-label [linsert [bindtags $w-label] 2 $f]
+	bindtags $w [linsert [bindtags $w] 2 $f]
+    }
+    set col [expr {$col * 3}]
+    grid $w-label -row $row -column $col -sticky we -padx 2 -pady 1
+    grid $w -row $row -column [incr col] -sticky we -padx 2 -pady 1
+    return $w
+}
+
+proc gui::statuswide {f col row var text} {
+    set w [statusvalue $f $col $row $var $text]
+    $w configure -width 10
+    return $w
+}
+
+proc gui::statuspage {f page} {
+    global cfg
+    variable statusdef
+    variable statuscfg
+    set list [string cat $page list]
+    set def $cfg(status,$list)
+    set rst {}
+    if {[info exists statuscfg($page)]} {set rst $statuscfg($page)}
+    if {[llength $def] == 0 && [llength $rst]} {set def $rst}
+    statusarea $f $statusdef $def
+
+    menu $f.statusmenu -tearoff 0
+    $f.statusmenu add command -label {Customize ...} \
+      -command [list [namespace which customize] $f $list $rst]
+    # $f.statusmenu add command -label {Add panel}
+    # $f.statusmenu add separator
+    # $f.statusmenu add command -label {Delete panel} -state disabled
+
+    bind $f <3> [list tk_popup $f.statusmenu %X %Y]
+}
+
+proc gui::statusarea {f def cfg} {
+    set sepnum 0
+    set col 0
+    set row 0
+    set last ""
+    set seps {}
+    set rows 0
+    foreach n $cfg {
+	if {$n eq ""} {
+	    set w $f.sep[incr sepnum]
+	    lappend seps $w
+	    if {![winfo exists $w]} {ttk::separator $w -orient vertical}
+	    grid $w -column [expr {$col * 3 + 2}] -row 0 -pady 2 -padx 4
+	    set rows [expr {max($rows, $row)}]
+	    incr col
+	    set row 0
+	} elseif {[dict exists $def $n]} {
+	    lassign [dict get $def $n] cmd str
+	    set w [$cmd $f $col $row $n $str]
+	    incr row
+	}
+	if {$last ne ""} {lower $w $last} else {raise $w}
+	if {[winfo exists $w-label]} {raise $w-label $w}
+	set last $w
+    }
+    set rows [expr {max($rows, $row)}]
+    foreach w [winfo children $f] {
+	if {$w eq $last} break
+	# The widget may already have been destroyed by a binding
+	if {[winfo exists $w]} {
+	    # Don't delete the context menu
+	    if {[winfo class $w] eq "Menu"} continue
+	    destroy $w
+	}
+    }
+    lassign [grid size $f] cols
+    for {set i [expr {3 * $col + 2}]} {$i < $cols} {incr i 3} {
+	grid columnconfigure $f $i -weight 0
+    }
+    foreach w $seps {
+	set column [dict get [grid info $w] -column]
+	if {$rows > 0} {
+	    grid configure $w -rowspan $rows -sticky ns
+	}
+	grid columnconfigure $f $column -weight 1
+    }
+}
+
 proc gui::start {} {
+    if {[catch main]} {
+	puts $::errorInfo
+	exit
+    }
+
+    scroll
+}
+
+proc gui::main {} {
     global cfg gui
     upvar #0 cfg(connection,type) devtype
+    variable statuscfg
+    variable statusdef
 
     themeinit
 
@@ -121,117 +307,12 @@ proc gui::start {} {
     place [ttk::label .bg] -relwidth 1 -relheight 1
     ttk::separator .sep
 
-    ttk::frame .f1
-    grid columnconfigure .f1 0 -weight 1
-    ttk::frame .f2
-    grid columnconfigure .f2 0 -weight 1
-    ttk::frame .f3
-    grid columnconfigure .f3 0 -weight 1
-    ttk::separator .sep1 -orient vertical
-    ttk::separator .sep2 -orient vertical
-    ttk::checkbutton .v1 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(dhwenable) -takefocus 0 -text "Domestic hot water enable "
-    ttk::checkbutton .v2 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(dhwmode) -takefocus 0 -text "Domestic hot water mode "
-    ttk::checkbutton .v3 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(fault) -takefocus 0 -text "Fault indication "
-    ttk::checkbutton .v4 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(flame) -takefocus 0 -text "Flame status "
-    ttk::checkbutton .v5 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(diag) -takefocus 0 -text "Diagnostic indication "
-    ttk::checkbutton .v15 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(chmode) -takefocus 0 -text "Central heating mode "
-    ttk::checkbutton .v19 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(chenable) -takefocus 0 -text "Central heating enable "
-    ttk::label .l6 -text "Boiler water temperature"
-    ttk::label .v6 -textvariable gui(boilertemp) -anchor e -width 6
-    ttk::label .l7 -text "Control setpoint"
-    ttk::label .v7 -textvariable gui(controlsp) -anchor e -width 6
-    ttk::label .l8 -text "DHW setpoint"
-    ttk::label .v8 -textvariable gui(dhwsetpoint) -anchor e -width 6
-    ttk::label .l9 -text "Max CH water setpoint"
-    ttk::label .v9 -textvariable gui(chwsetpoint) -anchor e -width 6
-    ttk::label .l10 -text "Relative modulation level"
-    ttk::label .v10 -textvariable gui(modulation) -anchor e -width 6
-    ttk::label .l11 -text "Room temperature"
-    ttk::label .v11 -textvariable gui(roomtemp) -anchor e -width 6
-    ttk::label .l12 -text "Room setpoint"
-    ttk::label .v12 -textvariable gui(setpoint) -anchor e -width 6
-    ttk::label .l13 -text "Return water temperature"
-    ttk::label .v13 -textvariable gui(returntemp) -anchor e -width 6
-    ttk::label .l14 -text "Outside temperature"
-    ttk::label .v14 -textvariable gui(outside) -anchor e -width 6
-    ttk::label .l16 -text "CH water pressure"
-    ttk::label .v16 -textvariable gui(pressure) -anchor e -width 6
-    ttk::label .l17 -text "Max relative modulation level"
-    ttk::label .v17 -textvariable gui(maxmod) -anchor e -width 6
-    ttk::label .l18 -text "DHW temperature"
-    ttk::label .v18 -textvariable gui(dhwtemp) -anchor e -width 6
-    ttk::label .l20 -text "Remote override room setpoint"
-    ttk::label .v20 -textvariable gui(override) -anchor e -width 6
-    ttk::label .l21 -text "OEM fault code"
-    ttk::label .v21 -textvariable gui(faultcode) -anchor e -width 6
-
-    grid .v4 -in .f1 -sticky we -padx 2 -pady 1
-    grid .v15 -in .f1 -sticky we -padx 2 -pady 1
-    grid .v19 -in .f1 -sticky we -padx 2 -pady 1
-    grid .v2 -in .f1 -sticky we -padx 2 -pady 1
-    grid .v1 -in .f1 -sticky we -padx 2 -pady 1
-    grid .v5 -in .f1 -sticky we -padx 2 -pady 1
-    grid .v3 -in .f1 -sticky we -padx 2 -pady 1
-
-    grid .l14 .v14 -in .f2 -sticky we -padx 2 -pady 1
-    grid .l11 .v11 -in .f2 -sticky we -padx 2 -pady 1
-    grid .l12 .v12 -in .f2 -sticky we -padx 2 -pady 1
-    grid .l20 .v20 -in .f2 -sticky we -padx 2 -pady 1
-    grid .l10 .v10 -in .f2 -sticky we -padx 2 -pady 1
-    grid .l17 .v17 -in .f2 -sticky we -padx 2 -pady 1
-    grid .l16 .v16 -in .f2 -sticky we -padx 2 -pady 1
-
-    grid .l6 .v6 -in .f3 -sticky we -padx 2 -pady 1
-    grid .l13 .v13 -in .f3 -sticky we -padx 2 -pady 1
-    grid .l7 .v7 -in .f3 -sticky we -padx 2 -pady 1
-    grid .l9 .v9 -in .f3 -sticky we -padx 2 -pady 1
-    grid .l18 .v18 -in .f3 -sticky we -padx 2 -pady 1
-    grid .l8 .v8 -in .f3 -sticky we -padx 2 -pady 1
-    grid .l21 .v21 -in .f3 -sticky we -padx 2 -pady 1
-
+    ttk::frame .status-ch1
+    statuspage .status-ch1 ch1
     ttk::separator .sep-ch2
     ttk::label .title-ch2 -text "CH circuit 2" -padding {4 0}
-
-    ttk::frame .f1-ch2
-    grid columnconfigure .f1-ch2 0 -weight 1
-    ttk::frame .f2-ch2
-    grid columnconfigure .f2-ch2 0 -weight 1
-    ttk::frame .f3-ch2
-    grid columnconfigure .f3-ch2 0 -weight 1
-    ttk::separator .sep1-ch2 -orient vertical
-    ttk::separator .sep2-ch2 -orient vertical
-
-    ttk::checkbutton .f1-ch2.v15 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(ch2mode) -text "Central heating mode "
-    ttk::checkbutton .f1-ch2.v19 -class TLabel -style Indicator.TCheckbutton \
-      -variable gui(ch2enable) -text "Central heating enable "
-    ttk::label .f2-ch2.l11 -text "Room temperature"
-    ttk::label .f2-ch2.v11 -textvariable gui(roomtemp2) -anchor e -width 6
-    ttk::label .f2-ch2.l12 -text "Room setpoint"
-    ttk::label .f2-ch2.v12 -textvariable gui(setpoint2) -anchor e -width 6
-    ttk::label .f3-ch2.l6 -text "Boiler water temperature"
-    ttk::label .f3-ch2.v6 -textvariable gui(boilertemp2) -anchor e -width 6
-    ttk::label .f3-ch2.l7 -text "Control setpoint"
-    ttk::label .f3-ch2.v7 -textvariable gui(controlsp2) -anchor e -width 6
-    ttk::label .f3-ch2.l18 -text "DHW temperature"
-    ttk::label .f3-ch2.v18 -textvariable gui(dhwtemp2) -anchor e -width 6
-
-    grid .f1-ch2.v15 -sticky we -padx 2 -pady 1
-    grid .f1-ch2.v19 -sticky we -padx 2 -pady 1
-
-    grid .f2-ch2.l11 .f2-ch2.v11 -sticky we -padx 2 -pady 1
-    grid .f2-ch2.l12 .f2-ch2.v12 -sticky we -padx 2 -pady 1
-
-    grid .f3-ch2.l6 .f3-ch2.v6 -sticky we -padx 2 -pady 1
-    grid .f3-ch2.l7 .f3-ch2.v7 -sticky we -padx 2 -pady 1
-    grid .f3-ch2.l18 .f3-ch2.v18 -in .f3-ch2 -sticky we -padx 2 -pady 1
+    ttk::frame .status-ch2
+    statuspage .status-ch2 ch2
 
     ttk::separator .sep3
     
@@ -265,27 +346,30 @@ proc gui::start {} {
     grid .bar.sep1 .bar.sep2 .bar.sep3 .bar.sep4 .bar.sep5 -sticky ns
     grid columnconfigure .bar .bar.stat -weight 1
 
-    grid .sep -padx 2 -sticky ew -columnspan 5
-    grid .f1 .sep1 .f2 .sep2 .f3 -sticky ns -pady 2 -padx 4
-    grid .sep-ch2 .title-ch2 -column 0 -columnspan 5
+    grid .sep -padx 2 -sticky ew
+    grid .status-ch1 -sticky nsew -pady 2 -padx 4
+    grid .sep-ch2 .title-ch2 -column 0
     grid .sep-ch2 -sticky ew -padx 2
-    grid .f1-ch2 .sep1-ch2 .f2-ch2 .sep2-ch2 .f3-ch2 -sticky nsew -pady 2 -padx 4
-    grid .sep3 -padx 2 -sticky ew -columnspan 5
-    grid .nb -columnspan 5 -sticky news -padx 8 -pady 8
-    grid .sep4 -padx 2 -sticky ew -columnspan 5
-    grid .bar -sticky ew -columnspan 5
+    grid .status-ch2 -sticky nsew -pady 2 -padx 4
+    grid .sep3 -padx 2 -sticky ew
+    grid .nb -sticky news -padx 8 -pady 8
+    grid .sep4 -padx 2 -sticky ew
+    grid .bar -sticky ew
 
-    # Do not show the CH2 information until its presence has been reported
-    grid remove {*}[lsearch -all -inline [winfo children .] *-ch2]
-    # Add a trace on the gui array to detect if a CH2 circuit is present
-    trace add variable gui write [namespace code ch2trace]
+    if {[llength $cfg(status,ch2list)] == 0} {
+	# Do not show the CH2 information until its presence has been reported
+	grid remove {*}[lsearch -all -inline [winfo children .] *-ch2]
+	# Add a trace on the gui array to detect if a CH2 circuit is present
+	trace add variable gui write [namespace code ch2trace]
+    }
 
     update idletasks
     if {[info exists tab($cfg(view,tab))]} {
 	.nb select $tab($cfg(view,tab))
     }
 
-    grid columnconfigure . {.sep1 .sep2} -weight 1
+    # grid columnconfigure . {.sep1 .sep2} -weight 1
+    grid columnconfigure . .nb -weight 1
     grid rowconfigure . .nb -weight 1
 
     set state [lindex {normal disabled} [expr {$devtype eq "file"}]]
@@ -1080,6 +1164,8 @@ proc gui::cfggeneral {w} {
     grid $w.f2.b -padx {2 6}
     grid columnconfigure $w.f2 $w.f2.e -weight 1
     pack $w.f2 -fill x -side top -pady 8
+
+    focus $w.f2.e
 
     learn GW
 
@@ -2278,13 +2364,15 @@ proc gui::capsmatch {e str} {
     }
 }
 
-namespace eval gui {
-    if {[catch start]} {
-	puts $errorInfo
-	exit
+proc gui::customize {f list rst} {
+    global cfg
+    variable statusdef
+    variable statuscfg
+    include customize.tcl
+    if {[llength $cfg(status,$list)] == 0 && [llength $rst]} {
+	set cfg(status,$list) $rst
     }
-
-    scroll
+    tailcall customize::dlg cfg(status,$list) $f $statusdef $rst
 }
 
 interp alias {} fwstatus {} setstatus fwstatus

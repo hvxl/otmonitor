@@ -1113,6 +1113,8 @@ proc masterstatus {list} {
     guiflag coolingenable [expr {([lindex $list 0] & 4) != 0}]
     guiflag otcstate [expr {([lindex $list 0] & 8) != 0}]
     guiflag ch2enable [expr {([lindex $list 0] & 16) != 0}]
+    guiflag dstmode [expr {([lindex $list 0] & 32) != 0}]
+    guiflag dhwblock [expr {([lindex $list 0] & 64) != 0}]
     return 0
 }
 
@@ -1161,7 +1163,14 @@ proc slaveconfig {list} {
     } {
     } $list
     lassign $list flags vendor
+    guiflag dhw [expr {($flags & 1) != 0}]
+    guiflag ctrltype [expr {($flags & 2) != 0}]
+    guiflag cooling [expr {($flags & 4) != 0}]
+    guiflag dhwstorage [expr {($flags & 8) != 0}]
+    guiflag pumpcontrol [expr {($flags & 16) != 0}]
     guiflag ch2 [expr {($flags & 32) != 0}]
+    guiflag remotefill [expr {($flags & 64) != 0}]
+    guiflag heatcool [expr {($flags & 128) != 0}]
     ### For testing !!!
     # guiflag ch2 [expr {($flags & 64) != 0}]
     return 0
@@ -1287,10 +1296,9 @@ proc overrideflags {list} {
     return 0
 }
 
-proc returntemp {list} {
+proc deltatemp {args} {
     global gui
-    guifloat returntemp returnwatertemperature $list
-    if {[info exists gui(boilertemp)]} {
+    if {[info exists gui(boilertemp)] && [info exists gui(returntemp)]} {
 	set value [format %.2f [expr {$gui(boilertemp) - $gui(returntemp)}]]
 	signal chwaterdeltat $value
 	set gui(deltatemp) $value
@@ -2259,6 +2267,8 @@ array set cfg {
     fsdialog,details	1
     fsdialog,historylist	{}
     otgw,pic		16f88
+    status,ch1list	{}
+    status,ch2list	{}
 }
 set cfg(datalog,itemlist) {
     flame
@@ -2407,6 +2417,9 @@ if {$firmware eq ""} {
     }
 }
 
+trace add variable gui(boilertemp) write deltatemp
+trace add variable gui(returntemp) write deltatemp
+
 special 0 0 masterstatus
 special 4 0 slavestatus
 special 1 2 masterconfig
@@ -2460,7 +2473,7 @@ special 4 103 reportflags {
     "System type"		{"DHW preheat" "DHW parallel"}
 } {
 }
-special 4 28 returntemp
+special 4 28 guifloat returntemp returnwatertemperature
 
 special 1 1 guifloat controlsp controlsetpoint
 special 1 8 guifloat controlsp2 controlsetpoint2
@@ -2653,6 +2666,9 @@ if {$firmware ne ""} {
 include dbus.tcl
 
 catch {include extra.tcl}
+
+# Start the GUI, if applicable
+gui start
 
 # In case we don't have Tk
 vwait forever
