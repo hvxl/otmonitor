@@ -16,6 +16,12 @@
 %     }
 % }
 % set maxx [expr {round($maxx)}]
+% set show visible
+% if {[dict exists $state request query legend {}]} {
+%     if {[string is false -strict [dict get $state request query legend {}]]} {
+%         set show hidden
+%     }
+% }
 % # Make sure there is at least enough room for the legend.
 % set width [expr {max($maxx, 220)}]
 % set height [expr {round($height)}]
@@ -26,24 +32,37 @@
 <svg width="$width" height="$height" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <title>Opentherm gateway graph</title>
 <style>
+svg {
+  background-color: white;
+}
 .legend {
   opacity: 0.8;
   background: #ffffff;
   cursor: default;
   fill: white;
   stroke: white;
+  visibility: $show
 }
 .legend text,circle {
   stroke: none;
 }
 </style>
+<script>
+// Clock difference between server and client
+const skew = [clock milliseconds] - Date.now()
+// Start time of the graph
+var start = [expr {max($start, $now - 7200) * 1000}]
+var ref = performance.timeOrigin + skew - start
+</script>
+<script href="graph.js"></script>
 <!-- Vertical lines -->
 % set sec [expr {$now / 300 * 300}]
 % set x [expr {$maxx - ($now % 300) / 5.}]
 % while {$x > 25} {
 %     set time [clock format $sec -format %H:%M]
-<polyline points="$x 0 $x $height" style="stroke: #eee; fill: none;"/>
-<text x="$x" y="[expr {$height - 2}]" text-anchor="middle" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$time</text>
+%     set mark [expr {$sec / 300 % 24}]
+<polyline id="marker$mark" class="vgrid" points="$x 0 $x $height" style="stroke: #eee; fill: none;"/>
+<text id="label$mark" class="time" x="$x" y="[expr {$height - 2}]" text-anchor="middle" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$time</text>
 %     set x [expr {$x - 60}]
 %     incr sec -300
 % }
@@ -56,7 +75,7 @@
 <!-- Horizontal lines -->
 %         for {set v $min} {$v <= $max} {incr v $scale} {
 %             set i [expr {$zero - $v * $zoom}]
-<polyline points="25 $i $maxx $i" style="stroke: #eee; fill: none;"/>
+<polyline class="hgrid" points="25 $i $maxx $i" style="stroke: #eee; fill: none;"/>
 %             set i [expr {$i + 4}]
 <text x="22" y="$i" text-anchor="end" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$v</text>
 %         }
@@ -70,20 +89,23 @@
 %                 set x [expr {max(25, $maxx - ($now - $ts) / 5.)}]
 %                 set i [expr {$zero - $val * $zoom}]
 %                 if {$x <= 25} {set coords {}}
+%                 if {[llength $coords] == 0 && $type eq "polygon"} {
+%                     if {$val} {lappend coords $x $zero}
+%                 }
 %                 lappend coords $x $i
 %             }
-%             lappend coords $maxx $i
+%             if {[llength $coords]} {lappend coords $maxx $i}
 %             if {$type eq "polygon"} {
 %                 if {$i != 0} {lappend coords $maxx $zero}
-%                 lappend coords [lindex $coords 0] $zero
 %                 set fill $color
 %             } else {
+%                 set type polyline
 %                 set fill none
 %             }
 <g>
 <title>$title</title>
-[format {<polyline points="%s" id="%s" style="stroke: %s; fill: %s;"/>} \
-  [join $coords] $name $color $fill]
+[format {<%s class="trace" id="%s" points="%s" data-zero="%g" data-zoom="%g" \
+  style="stroke: %s; fill: %s;"/>} $type $name [join $coords] $zero $zoom $color $fill]
 </g>
 %         }
 %         set v [expr {$y + 4}]
