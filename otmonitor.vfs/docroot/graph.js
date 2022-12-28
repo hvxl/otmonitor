@@ -98,7 +98,8 @@ function scroll(ms) {
 		while (n > 0) line.points.removeItem(--n)
 	    }
 	}
-    } else {
+    }
+    if (width < 1440 + margin) {
 	// Calculate the new width
 	width = Math.min(1440, Math.round(pos / 5000)) + margin
 	// Resize the image
