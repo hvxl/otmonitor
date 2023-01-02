@@ -1299,9 +1299,14 @@ proc overrideflags {list} {
 proc deltatemp {args} {
     global gui
     if {[info exists gui(boilertemp)] && [info exists gui(returntemp)]} {
-	set value [format %.2f [expr {$gui(boilertemp) - $gui(returntemp)}]]
-	signal chwaterdeltat $value
-	set gui(deltatemp) $value
+	if {[string is double -strict $gui(boilertemp)] \
+	  && [string is double -strict $gui(returntemp)]} {
+	    set value [format %.2f [expr {$gui(boilertemp) - $gui(returntemp)}]]
+	    signal chwaterdeltat $value
+	    set gui(deltatemp) $value
+	} else {
+	    set gui(deltatemp) ???
+	}
     }
 }
 
