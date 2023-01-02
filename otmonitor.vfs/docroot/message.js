@@ -1,4 +1,6 @@
 var wsurl = "ws" + document.URL.match("s?://[-a-zA-Z0-9.:_/]+/") + "message.ws"
+var log
+const logmax = 1000000
 
 if ("WebSocket" in window) {
    var ws = new WebSocket(wsurl);
@@ -6,24 +8,24 @@ if ("WebSocket" in window) {
    ws = new MozWebSocket(wsurl)
 }
 
-if (ws) {
-  ws.onopen = function () {
-    log = document.getElementById("log");
-  }
-
-  ws.onmessage = function (evt) {
-    var scroll = tailing();
-    log.innerHTML += evt.data + "\n";
-    if (scroll) {
-      var ypos = document.body.scrollHeight - document.body.clientHeight
-      window.scrollTo(0, ypos)
+addEventListener("load", function () {
+  log = document.getElementById("log")
+  if (ws) {
+    ws.onmessage = function (evt) {
+      let scroll = tailing();
+      log.innerText += evt.data + "\n";
+      let len = log.innerText.length
+      if (len > logmax) {
+        let p = log.innerText.indexOf('\n', len - logmax) + 1
+        log.innerText = log.innerText.substring(p)
+      }
+      if (scroll) {
+        var ypos = document.body.scrollHeight - document.body.clientHeight
+        window.scrollTo(0, ypos)
+      }
     }
   }
-
-  ws.onclose = function (evt) {
-    log = null;
-  }
-}
+})
 
 // Check if the scrollbar is at the bottom
 function tailing () {
