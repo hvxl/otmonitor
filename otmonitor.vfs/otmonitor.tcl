@@ -65,12 +65,13 @@ set functions {
 set gpiofunc {
     0	"None"
     1	"Ground (0V)"
-    2	"Vcc (5V)"
+    2	"Vcc (3.3V/5V)"
     3	"LED E"
     4	"LED F"
     5	"Setback (low)"
     6	"Setback (high)"
     7	"Temp sensor"
+    8	"DHW block"
 }
 
 array set error {
