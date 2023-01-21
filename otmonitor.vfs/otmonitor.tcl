@@ -1750,7 +1750,7 @@ proc fileanal {} {
     # Read a couple of lines
     set re {\m[ABRT][0-9A-F]{8}\M}
     set lines [lsearch -all -inline -regexp [split [read $dev 16384] \n] $re]
-    if {[dict exists [chan configure $dev] -header filename]} {
+    if {[dict exists [chan configure $dev] -header crc]} {
 	# Can't seek inside a gzipped stream
 	chan pop $dev
 	seek $dev 0
