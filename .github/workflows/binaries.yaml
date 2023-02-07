@@ -1,0 +1,88 @@
+---
+name: Build binaries
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v3
+
+      - name: Get sdx kit
+        env:
+          SDXURL: "https://chiselapp.com/\
+            user/aspect/repository/sdx/uv/sdx-20110317.kit"
+        run: curl $SDXURL --output sdx.kit
+
+      - name: Download tclkits
+        run: |
+          curl ${{vars.DOWNLOADURL}}/tclkit --output tclkit
+          curl ${{vars.DOWNLOADURL}}/tclkit-x64 --output tclkit-x64
+          curl ${{vars.DOWNLOADURL}}/tclkit-ahf --output tclkit-ahf
+          curl ${{vars.DOWNLOADURL}}/tclkit-aarch64 --output tclkit-aarch64
+          curl ${{vars.DOWNLOADURL}}/tclkit.exe --output tclkit.exe
+
+      - name: Install tclkit
+        run: |
+          echo ${{vars.TESTVAR}}
+          sudo cp tclkit-x64 /usr/local/bin/tclkit
+          sudo chmod +x /usr/local/bin/tclkit
+
+      - name: Build linux x86 32-bit binary
+        run: >
+          tclkit sdx.kit wrap
+          otmonitor -vfs otmonitor.vfs -runtime tclkit
+
+      - name: Upload linux x86 32-bit binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: Linux x86 32-bit binary
+          path: otmonitor
+
+      - name: Build linux x86 64-bit binary
+        run: >
+          tclkit sdx.kit wrap
+          otmonitor-x64 -vfs otmonitor.vfs -runtime tclkit-x64
+
+      - name: Upload linux x86 64-bit binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: Linux x86 64-bit binary
+          path: otmonitor-x64
+
+      - name: Build linux arm 32-bit binary
+        run: >
+          tclkit sdx.kit wrap
+          otmonitor-ahf -vfs otmonitor.vfs -runtime tclkit-ahf
+
+      - name: Upload linux arm 32-bit binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: Linux arm 32-bit binary
+          path: otmonitor-ahf
+
+      - name: Build linux arm 64-bit binary
+        run: >
+          tclkit sdx.kit wrap
+          otmonitor-aarch64 -vfs otmonitor.vfs -runtime tclkit-aarch64
+
+      - name: Upload linux arm 64-bit binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: Linux arm 64-bit binary
+          path: otmonitor-aarch64
+
+      - name: Build windows binary
+        run: >
+          tclkit sdx.kit wrap
+          otmonitor.exe -vfs otmonitor.vfs -runtime tclkit.exe
+
+      - name: Upload windows binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: Windows binary
+          path: otmonitor.exe
