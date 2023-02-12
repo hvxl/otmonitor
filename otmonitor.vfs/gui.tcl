@@ -12,6 +12,7 @@ try {
 }
 
 package require matchbox
+package require search
 
 include themes.tcl
 
@@ -392,6 +393,11 @@ proc gui::main {} {
     .m.edit add command -label "Select all" -state disabled \
       -command {event generate .nb.f1.t <<SelectAll>>} \
       -accelerator [accelerator <<SelectAll>>]
+    .m.edit add command -label "Clear log" -state disabled \
+      -command [list event generate $tab(log) <<ClearLog>>]
+    .m.edit add separator
+    .m.edit add command -label "Search ..." -state disabled \
+      -command [list event generate $tab(log).t <<Search>>]
     .m add cascade -label Options -menu [menu .m.opts -tearoff 0] -state $state
     .m.opts add command -label "Thermostat" -accelerator F2 -state $state \
       -command [namespace code [list configdlg thermostat]]
@@ -486,7 +492,10 @@ proc gui::logframe {w} {
     $w.f1.t tag configure unknown -foreground #800080
     $w.f1.t tag configure invalid -foreground #800000
     $w.f1.t tag configure error -foreground #FF0000
+    $w.f1.t tag configure found -background yellow
     ttk::scrollbar $w.f1.vs -command [list $w.f1.t yview]
+    # Add a search widget for the log
+    ttk::search $w.f1.t "Search log"
     grid $w.f1.t $w.f1.vs -sticky wnse
     grid columnconfigure $w.f1 $w.f1.t -weight 1
     grid rowconfigure $w.f1 $w.f1.t -weight 1
@@ -494,6 +503,7 @@ proc gui::logframe {w} {
     bind $w.f1.t <Home> {%W yview moveto 0;break}
     bind $w.f1.t <End> {%W yview moveto 1;break}
     bind $w.f1.t <<Selection>> [namespace code selection]
+    bind $w.f1 <<ClearLog>> [namespace code [list clearlog $w.f1.t]]
     return $w.f1
 }
 
@@ -2238,6 +2248,14 @@ proc gui::selection {} {
     }
     .m.edit entryconfigure 0 -state $st1
     .m.edit entryconfigure 1 -state $st2
+    .m.edit entryconfigure 2 -state $st2
+    .m.edit entryconfigure 4 -state $st2
+}
+
+proc gui::clearlog {w} {
+    $w configure -state normal
+    $w delete 1.0 end
+    $w configure -state disabled
 }
 
 proc gui::fork {file} {
