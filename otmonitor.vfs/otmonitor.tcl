@@ -507,8 +507,12 @@ proc process {line {us ""}} {
 	foreach n $psmsgs v $psdata {
 	    psdata $n $v
 	}
-	if {$cfg(view,resumelog) && !$capsbusy} {
-	    sercmd PS=0
+	if {!$capsbusy} {
+	    if {$cfg(view,resumelog)} {
+		sercmd PS=0
+	    } else {
+		after cancel flatline
+	    }
 	}
     } elseif {[scan $line {Opentherm gateway diagnostics - Version %s} ver] == 1} {
 	set fwvariant diagnose
@@ -1025,6 +1029,31 @@ proc otmessage {us src type id data} {
     set last($type,$id) [linsert [lrange $last($type,$id) 0 $index] 0 $now]
 }
 
+# Call when a status ReadData message is reported by the OTGW
+# All known thermostats send that message at least every 30 seconds
+proc heartbeat {} {
+    after cancel flatline
+    after 60000 flatline
+}
+
+proc flatline {} {
+    global dev cfg
+    if {[info exists dev] && $cfg(connection,type) eq "tcp"} {
+	set xlat [fconfigure $dev -translation]
+	fconfigure $dev -translation binary
+	# Send a LF to check connectivity. The OTGW ignores LFs.
+	if {[catch {puts $dev ""} err errinfo]} {
+	    # Communication error
+	    surprise $errinfo flatline
+	    connect reconnect
+	} else {
+	    # Communication is fine
+	    fconfigure $dev -translation $xlat
+	    after 300000 flatline
+	}
+    }
+}
+
 proc register {id argtypes desc} {
     global message
     set message($id) [list $desc $argtypes]
@@ -1120,6 +1149,7 @@ proc masterstatus {list} {
     guiflag ch2enable [expr {([lindex $list 0] & 16) != 0}]
     guiflag dstmode [expr {([lindex $list 0] & 32) != 0}]
     guiflag dhwblock [expr {([lindex $list 0] & 64) != 0}]
+    heartbeat
     return 0
 }
 
@@ -1514,6 +1544,7 @@ proc connectcoro {type} {
 		surprise $errinfo
 	    }
 	    unset dev
+	    after cancel flatline
 	    set devtype none
 	    connected false
 	    if {$ev ne "failed"} {
