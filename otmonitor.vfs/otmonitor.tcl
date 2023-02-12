@@ -495,6 +495,8 @@ proc process {line {us ""}} {
 		48 49 56 57 70 71 77 116 117 118 119 120 121 122 123
 	    }
 	} elseif {[llength $psdata] == 25} {
+	    # Make sure this is not pre-5.X data cut short by a command
+	    if {[regexp {[^\d.,/]} $line]} return
 	    # PS layout before version 5.X
 	    set psmsgs {
 		0 1 6 14 15 16 17 18 24 25 26 27 28
