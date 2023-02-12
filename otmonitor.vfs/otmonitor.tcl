@@ -65,7 +65,7 @@ set functions {
 set gpiofunc {
     0	"None"
     1	"Ground (0V)"
-    2	"Vcc (3.3V/5V)"
+    2	"Vdd (3.3V/5V)"
     3	"LED E"
     4	"LED F"
     5	"Setback (low)"
@@ -418,7 +418,11 @@ proc receive {{data ""}} {
     if {[eof $dev] || [catch {gets $dev line} len]} {
 	connect reconnect
     } elseif {$len != -1} {
-	process [append data $line]
+	if {$data ne ""} {
+	    set line [string cat $data $line]
+	    fileevent $dev readable receive
+	}
+	process $line
     }
 }
 
@@ -1813,8 +1817,7 @@ proc sockdata {} {
 	    fileevent $dev readable telnet
 	    telnet $data
 	} else {
-	    fileevent $dev readable receive
-	    receive $data
+	    fileevent $dev readable [list receive $data]
 	}
     }
 }
