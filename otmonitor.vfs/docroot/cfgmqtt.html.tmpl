@@ -1,11 +1,11 @@
-% global cfg
+% global cfg mqttstatus
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <link rel="stylesheet" type="text/css" href="config.css">
 <script>
-var query = {"var": "cfg"};
+var query = {"var": \["cfg", "mqttstatus"\]};
 function mqtt(w) {
     config('mqtt', 'enable', w.checked);
     eval("mqttserver");
@@ -120,6 +120,13 @@ function mqtt(w) {
 <td>
 <input type="number" style="width: 8em;" id="mqtt,retransmit" min="0" max="65536" value="[get cfg(mqtt,retransmit) 10]" step="1" onchange="input(this, 'mqtt', 'retransmit')">
 </td>
+</tr>
+<tr>
+<td colspan="3"><hr></td>
+</tr>
+<tr>
+<td>Status:</td>
+<td id="mqttstatus">$mqttstatus</td>
 </tr>
 
 

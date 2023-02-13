@@ -1840,9 +1840,10 @@ proc gui::cfgmqtt {w} {
       -variable cfg(mqtt,enable) -onvalue true -offvalue false
     ttk::labelframe $w.f1 -labelwidget $w.c1
     ttk::label $w.f1.l1 -text "Broker Address:"
+    ttk::frame $w.f1.f1
     ttk::entrybox $w.f1.e1 -textvariable cfg(mqtt,broker)
-    ttk::label $w.f1.l2 -text "Broker Port:"
-    ttk::entrybox $w.f1.e2 -textvariable cfg(mqtt,port) -width 8
+    ttk::label $w.f1.l2 -text "Port:"
+    ttk::entrybox $w.f1.e2 -textvariable cfg(mqtt,port) -width 6
     ttk::checkbutton $w.f1.c2 -text "SSL/TLS" \
       -variable cfg(mqtt,secure) -onvalue true -offvalue false
     ttk::label $w.f1.l12 -text "Protocol:"
@@ -1868,18 +1869,23 @@ proc gui::cfgmqtt {w} {
     ttk::checkbutton $w.f1.c11 -text "All Messages" \
       -variable cfg(mqtt,messages) -onvalue true -offvalue false
     ttk::label $w.f1.l10 -text "Quality of Service:"
-    ttk::combobox $w.f1.e10 -state readonly \
-      -values {{Fire and forget} {Acknowledged delivery} {Assured delivery}}
+    ttk::combobox $w.f1.e10 -state readonly -values {
+	{0: Fire and forget} {1: Acknowledged delivery} {2: Assured delivery}
+    }
     bind $w.f1.e10 <<ComboboxSelected>> {set cfg(mqtt,qos) [%W current]}
     $w.f1.e10 current $cfg(mqtt,qos)
     ttk::label $w.f1.l8 -text "Keep-alive Interval:"
     ttk::spinbox $w.f1.e8 -to 65536 -textvariable cfg(mqtt,keepalive) -width 8
     ttk::label $w.f1.l9 -text "Retransmit Time:"
     ttk::spinbox $w.f1.e9 -to 65536 -textvariable cfg(mqtt,retransmit) -width 8
+    ttk::label $w.f1.l13 -text "Status:"
+    ttk::label $w.f1.e13 -textvariable mqttstatus
+    ttk::separator $w.f1.sep1
 
-    grid $w.f1.l1 $w.f1.e1 - -sticky we -padx 6 -pady 3
-    grid $w.f1.l2 $w.f1.e2 $w.f1.c2 -sticky we -padx 6 -pady 3
-    grid $w.f1.l12 $w.f1.e12 - -sticky we -padx 6 -pady 3
+    grid $w.f1.l1 $w.f1.f1 - -sticky we -padx 6 -pady 3
+    grid $w.f1.e1 $w.f1.l2 $w.f1.e2 -in $w.f1.f1 -sticky we
+    grid $w.f1.l2 -padx 4
+    grid $w.f1.l12 $w.f1.e12 $w.f1.c2 -sticky we -padx 6 -pady 3
     grid $w.f1.l3 $w.f1.e3 - -sticky we -padx 6 -pady 3
     grid $w.f1.l4 $w.f1.e4 - -sticky we -padx 6 -pady 3
     grid $w.f1.l5 $w.f1.e5 - -sticky we -padx 6 -pady 3
@@ -1889,9 +1895,12 @@ proc gui::cfgmqtt {w} {
     grid $w.f1.l10 $w.f1.e10 - -sticky we -padx 6 -pady 3
     grid $w.f1.l8 $w.f1.e8 - -sticky we -padx 6 -pady 3
     grid $w.f1.l9 $w.f1.e9 - -sticky we -padx 6 -pady 3
+    grid $w.f1.sep1 - - -sticky we -padx 4 -pady 3
+    grid $w.f1.l13 $w.f1.e13 - -sticky we -padx 6 -pady 3
     grid $w.f1.e2 $w.f1.e8 $w.f1.e9 $w.f1.e10 $w.f1.e11 $w.f1.e12 -sticky w
     grid columnconfigure $w.f1 $w.f1.e11 -weight 1
-    
+    grid columnconfigure $w.f1.f1 $w.f1.e1 -weight 1
+
     pack $w.f1 -fill x -side top
 }
 

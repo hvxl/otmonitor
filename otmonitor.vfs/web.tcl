@@ -204,7 +204,7 @@ proc ::wibble::zone::status {state event args} {
     # Process variable changes.
     if {$event in {varchange}} {
 	lassign $args name - arg op
-	set what status
+	set what var
 	upvar #0 $name var
 	if {[array exists var]} {
 	    set val $var($arg)
@@ -214,7 +214,7 @@ proc ::wibble::zone::status {state event args} {
 	    set arg $name
 	}
 	# [format {{"%s":{"%s":"%s"}}} $what $arg $val]
-        ws::send text [::json build object varchange $what $arg $val]
+	ws::send text [::json build object varchange $what $arg $val]
     }
 
     # Process commands received over the websocket

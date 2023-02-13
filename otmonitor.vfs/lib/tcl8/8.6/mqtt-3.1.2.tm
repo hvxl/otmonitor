@@ -1,4 +1,4 @@
-# MQTT Utilities - 2019, 2021 Schelte Bron
+# MQTT Utilities - 2019 Schelte Bron
 # library of routines for mqtt comms.
 # All normative statement references refer to the mqtt-v5.0-os document:
 # https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.pdf
@@ -168,6 +168,7 @@ oo::class create mqtt {
 	    -protocol		5
 	    -socketcmd		socket
 	}
+	variable status idle
 	variable fd "" data "" queue {} connect {} coro "" events {}
 	variable subscriptions {} seqnum 0 statustopic {$SYS/local}
 	variable authentication {} authmethod {} topicalias {} aliasmax 0
@@ -469,7 +470,7 @@ oo::class create mqtt {
 
     method disconnected {msg} {
 	set code [dict get $msg reason]
-	my status connection [dict create type DISCONNECT reason $code]
+	my event connection [dict create type DISCONNECT reason $code]
     }
 
     method challenge {fd msg} {
@@ -513,7 +514,7 @@ oo::class create mqtt {
     method close {{retcode 0}} {
 	my variable fd
 	if {$fd ne "" || $retcode != 0} {
-	    my status connection \
+	    my event connection \
 	      [dict create type DISCONNECT reason $retcode]
 	}
 	if {$fd ne ""} {
@@ -677,6 +678,8 @@ oo::class create mqtt {
 	}
 	log "Connecting to $host on port $port"
 	if {[catch {{*}[my configure -socketcmd] -async $host $port} sock]} {
+	    my event connection \
+	      [dict create type CONNECT reason 136 detail $sock]
 	    log "Connection failed: $sock"
 	    return 10000
 	}
@@ -701,7 +704,9 @@ oo::class create mqtt {
 			    fileevent $sock readable [list $coro receive $sock]
 			    my message $sock CONNECT connect
 			} else {
-			    log "Connection failed: $error"
+			    my event connection [dict create type CONNECT \
+			      reason 136 detail $error]
+			    log "Connection failed (contact): $error"
 			    return 10000
 			}
 		    }
@@ -712,7 +717,7 @@ oo::class create mqtt {
 		    CONNACK {
 			lassign $args msg
 			set retcode [dict get $msg retcode]
-			my status connection $msg
+			my event connection $msg
 			# A receiver MUST NOT carry forward any Topic Alias
 			# mappings from one Network Connection to another
 			# [MQTT-3.3.2-7].
@@ -752,6 +757,10 @@ oo::class create mqtt {
 			break
 		    }
 		    queue {}
+		    eof {
+			throw [list MQTT CONNECTION EOF] \
+			  "the server closed the connection"
+		    }
 		    default {
 			throw [list MQTT UNEXPECTED $event] \
 			  "unexpected event: $event"
@@ -761,7 +770,9 @@ oo::class create mqtt {
 	} trap {MQTT CONNECTION REFUSED} {} {
 	    # The failure has already been reported
 	} on error {err info} {
-	    my status connection {type CONNECT reason 136}
+	    # The MQTT Server is not available
+	    my event connection \
+	      [dict create type CONNECT reason 136 detail $err]
 	    # Rethrow the error
 	    return -options [dict incr info -level] $err
 	} finally {
@@ -926,7 +937,7 @@ oo::class create mqtt {
 		set reason [dict get $msg reason]
 		# The only valid Authenticate Reason Codes are 0, 24, and 25
 		if {$reason == 0} {
-		    my status connection $msg
+		    my event connection $msg
 		    log "re-authentication succeeded"
 		} elseif {$reason >= 128} {
 		    # This is a protocol error
@@ -972,7 +983,7 @@ oo::class create mqtt {
 	    # Send out notifications and then wait for something to happen
 	    set rc [yieldto my notifier]
 	    if {[lindex $rc 0] ne "receive"} {return $rc}
-	    if {[eof $fd]} {return EOF}
+	    if {[eof $fd]} {return eof}
 	    set size [string length $data]
 	    # A message is at least 2 bytes
 	    if {$size < 2} {
@@ -1175,21 +1186,21 @@ oo::class create mqtt {
 	unset pending($type,$msgid)
 	switch -- $type {
 	    PUBLISH {
-		my status publication [dict merge $msg $ack]
+		my event publication [dict merge $msg $ack]
 	    }
 	    PUBREL {
 		if {[info exists pending(PUBLISH,$msgid)]} {
 		    set msg [dict get $pending(PUBLISH,$msgid) msg]
 		    unset pending(PUBLISH,$msgid)
-		    my status publication [dict merge $msg $ack]
+		    my event publication [dict merge $msg $ack]
 		}
 	    }
 	    SUBSCRIBE - UNSUBSCRIBE {
-		my status subscription [dict merge $msg $ack]
+		my event subscription [dict merge $msg $ack]
 	    }
 	    default {
 		if {$reason >= 128} {
-		    my status publication [dict merge $msg $ack]
+		    my event publication [dict merge $msg $ack]
 		}
 	    }
 	}
@@ -1201,8 +1212,8 @@ oo::class create mqtt {
 	return
     }
 
-    method status {notification msg} {
-	my variable statustopic subscriptions
+    method event {notification msg} {
+	my variable statustopic subscriptions status
 	set msg [dict merge {control {} prop {}} $msg]
 	switch $notification {
 	    connection {
@@ -1211,25 +1222,39 @@ oo::class create mqtt {
 		    set code [dict get $msg retcode]
 		    if {!$code} {
 			set data [dict create state connected]
+			set status connected
 			if {[dict exists $msg session]} {
 			    dict set data session [dict get $msg session]
 			}
 		    } else {
+			set str [reasontext $code]
+			set status [list failed $str]
 			dict set data reason $code
-			dict set data text [reasontext $code]
+			dict set data text $str
 		    }
 		} elseif {[dict get $msg type] eq "AUTH"} {
 		    set data [dict create state connected]
+		    set status connected
 		} elseif {[dict exists $msg reason]} {
 		    set code [dict get $msg reason]
 		    dict set data reason $code
+		    if {[dict get $msg type] eq "CONNECT"} {
+			set status failed
+		    } else {
+			set status disconnected
+		    }
 		    if {!$code} {
 			# Normal disconnection
 			set str "normal disconnection"
 		    } else {
 			set str [reasontext $code]
 		    }
+		    lappend status $str
 		    dict set data text $str
+		    if {[dict exists $msg detail]} {
+			dict set data detail [dict get $msg detail]
+			lappend status [dict get $msg detail]
+		    }
 		}
 	    }
 	    publication {
@@ -1735,6 +1760,11 @@ oo::class create mqtt {
 	return [my data $data]
     }
 
+    method status {} {
+	my variable status
+	return $status
+    }
+
     method properties {args} {
 	try {my vbi} on ok {len opts} {
 	    set rc [expr {$len + [dict get $opts -count]}]
@@ -1936,10 +1966,10 @@ oo::class create mqtt {
 
     # Hide private methods that would otherwise be visible
     unexport ack bin bindata challenge client close connack control
-    unexport data decode dialog disconnected dup finish handle invalid
+    unexport data decode dialog disconnected dup event finish handle invalid
     unexport keepalive match message notifier notify payload process
     unexport properties props protocol queue receive reason reasoncode report
-    unexport seqnum session sleep status string stringpair structure suback
+    unexport seqnum session sleep string stringpair structure suback
     unexport subscriptions timer retransmit unsuback validate varint vbi
 }
 

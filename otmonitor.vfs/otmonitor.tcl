@@ -26,6 +26,7 @@ set signalproc {}
 set clients {}
 set connected 0
 set capsbusy 0
+set mqttstatus Disconnected
 
 # Allow users to override the built-in pages
 lappend docpath [file join [file dirname $starkit::topdir] html]
@@ -2068,6 +2069,7 @@ proc mqttserver {} {
 	}
     } else {
 	catch {$mqtt destroy}
+	variable mqttstatus Disconnected
     }
 }
 

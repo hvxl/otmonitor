@@ -39,8 +39,9 @@ proc mqttinit {} {
       -password $cfg(mqtt,password) -keepalive $cfg(mqtt,keepalive) \
       -retransmit [expr {$cfg(mqtt,retransmit) * 1000}] \
       -protocol $protocol -socketcmd [socketcommand $cfg(mqtt,secure)]]
-    $mqtt connect $cfg(mqtt,client) $cfg(mqtt,broker) $cfg(mqtt,port)
+    $mqtt subscribe {$SYS/local/connection} mqttstatus
     $mqtt subscribe $cfg(mqtt,actiontopic)/+ mqttaction
+    $mqtt connect $cfg(mqtt,client) $cfg(mqtt,broker) $cfg(mqtt,port)
 
     signalproc mqttsignal
 
@@ -187,6 +188,22 @@ proc mqttpub {topic data {qos 1} {retain 0}} {
 
 proc mqttraw {name data} {
     return [join $data ,]
+}
+
+proc mqttstatus {topic data retained {prop {}}} {
+    global mqttstatus
+    if {[dict get $data state] eq "connected"} {
+	if {[dict exists $prop AssignedClientIdentifier]} {
+	    set name [dict get $prop AssignedClientIdentifier]
+	    set mqttstatus "Connected as $name"
+	} else {
+	    set mqttstatus Connected
+	}
+    } elseif {[dict exists $data detail]} {
+	set mqttstatus [string toupper [dict get $data detail] 0 0]
+    } else {
+	set mqttstatus [string toupper [dict get $data text] 0 0]
+    }
 }
 
 proc mqttaction {topic data args} {

@@ -53,6 +53,7 @@ if (ws) {
 	var message = JSON.parse(evt.data)
 	for (var section in message) {
 	    switch (section) {
+	      case "var":
 	      case "status":
 	      case "config":
 		for (var id in message[section]) {
