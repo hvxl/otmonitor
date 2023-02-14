@@ -180,7 +180,12 @@ proc mqttpub {topic data {qos 1} {retain 0}} {
 		set msg [dict get $data value]
 	    }
 	}
-	$mqtt publish $topic $msg $qos $retain
+	if {[dict exists $data properties] && [$mqtt configure -protocol] >= 5} {
+	    $mqtt publish -properties [dict get $data properties] \
+	      $topic $msg $qos $retain
+	} else {
+	    $mqtt publish $topic $msg $qos $retain
+	}
     } on error {err info} {
 	puts stderr [dict get $info -errorinfo]
     }
@@ -206,8 +211,14 @@ proc mqttstatus {topic data retained {prop {}}} {
     }
 }
 
-proc mqttaction {topic data args} {
-    global cfg mqttactions
+proc mqttaction {topic data retain props args} {
+    global cfg mqttactions actionid
+    if {[dict exists $props ResponseTopic]} {
+	# To be able to provide a response, the proc must run as a coroutine
+	if {[info coroutine] eq ""} {
+	    tailcall coroutine mqttaction[incr actionid] {*}[info level 0]
+	}
+    }
     set name [lindex [split $topic /] end]
     if {[dict exists $mqttactions $name]} {
 	lassign [dict get $mqttactions $name] arg cmd
@@ -241,7 +252,16 @@ proc mqttaction {topic data args} {
 	    return
 	}
     }
-    sercmd $cmd=$value "via MQTT"
+    set rc [sercmd $cmd=$value "via MQTT"]
+    if {[dict exists $props ResponseTopic]} {
+	set topic [dict get $props ResponseTopic]
+	set data [dict create value [list $rc] def {response string}]
+	# Return the correlation data, if any
+	if {[dict exists $props CorrelationData]} {
+	    dict set data properties [dict filter $props key CorrelationData]
+	}
+	mqttpub $topic $data $cfg(mqtt,qos)
+    }
 }
 
 mqttinit

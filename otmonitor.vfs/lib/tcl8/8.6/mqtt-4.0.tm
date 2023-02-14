@@ -1149,7 +1149,7 @@ oo::class create mqtt {
 
     method bindata {{name ""}} {
 	lassign [payload Su] len
-	lassign [payload cu$len $name] data
+	lassign [payload a$len $name] data
 	return -count [incr len 2] $data
     }
 

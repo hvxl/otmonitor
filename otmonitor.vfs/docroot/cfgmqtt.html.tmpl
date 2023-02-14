@@ -102,9 +102,9 @@ function mqtt(w) {
 <td>Quality of Service:</td>
 <td colspan="2">
 <select id="mqtt,qos" onchange="input(this, 'mqtt', 'qos')">
-<option [selected cfg(mqtt,qos) 0]>Fire and forget</option>
-<option [selected cfg(mqtt,qos) 1]>Acknowledged delivery</option>
-<option [selected cfg(mqtt,qos) 2]>Assured delivery</option>
+<option [selected cfg(mqtt,qos) 0]>0: Fire and forget</option>
+<option [selected cfg(mqtt,qos) 1]>1: Acknowledged delivery</option>
+<option [selected cfg(mqtt,qos) 2]>2: Assured delivery</option>
 </select>
 </td>
 </tr>
