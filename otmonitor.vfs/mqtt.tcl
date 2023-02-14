@@ -222,6 +222,9 @@ proc mqttaction {topic data retain props args} {
     set name [lindex [split $topic /] end]
     if {[dict exists $mqttactions $name]} {
 	lassign [dict get $mqttactions $name] arg cmd
+    } elseif {$name eq "command"} {
+	set arg command
+	set cmd ""
     } else {
 	# Unknown action
 	return
@@ -252,7 +255,12 @@ proc mqttaction {topic data retain props args} {
 	    return
 	}
     }
-    set rc [sercmd $cmd=$value "via MQTT"]
+    if {$cmd ne ""} {
+	append cmd = $value
+    } else {
+	set cmd $value
+    }
+    set rc [sercmd $cmd "via MQTT"]
     if {[dict exists $props ResponseTopic]} {
 	set topic [dict get $props ResponseTopic]
 	set data [dict create value [list $rc] def {response string}]
