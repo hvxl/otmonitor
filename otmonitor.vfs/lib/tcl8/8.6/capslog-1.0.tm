@@ -2,15 +2,20 @@ namespace eval capslog {
     namespace ensemble create \
       -subcommands {start stop track abort upload} -map {abort {stop 1}}
     variable file ""
-    variable demand ""
     variable cleanup {}
-    variable needed {0 1 2 3 14 25} preferred {9 16 24}
-    variable wronly {1 2 4 7 8 14 16 23 24 37 71 98 124 126}
-    variable queue ""
+    variable cmdqueue {}
     variable handlers {}
     variable state idle message ""
-    variable target 500
     variable afterid ""
+    variable choice 0
+    # Number of messages to collect initially
+    variable target 500
+    # Never disable these messages. They are critical to heating control
+    variable needed {0 1 2 3 14 17 25}
+    # Do not disable these messages, unless there is no other option
+    variable preferred {7 8 28 29 30 31 70 71 77 101 102}
+    # Messages that should not be queried, because they may only be written
+    variable wronly {1 2 4 7 8 14 16 23 24 37 71 98 124 126}
 }
 
 proc capslog::start {{list {}}} {
@@ -21,6 +26,8 @@ proc capslog::start {{list {}}} {
     variable count 0
     if {$state ni {idle done}} {stop 1}
     variable mode ""
+    variable demand ""
+    variable choice 0
     variable cleanup {}
     variable cmd [namespace which output]
     variable fd [file tempfile file capslog.gz]
@@ -43,9 +50,16 @@ proc capslog::stop {{abort 0} {msg "data collection aborted"}} {
     variable cmd
     variable cleanup
     variable afterid
-    after cancel [namespace which stop]
     after cancel $afterid
-    foreach sercmd $cleanup {sercmd $sercmd}
+    after cancel [namespace which stop]
+    set ns [namespace current]
+    foreach n $cleanup {
+	lassign $n sercmd cond
+	if {$cond eq "" || \
+	  [catch {namespace eval $ns [list expr $cond]} rc] || $rc} {
+	    sercmd $sercmd
+	}
+    }
     trace remove execution ::output leave $cmd
     close $fd
     if {$abort} {
@@ -91,9 +105,9 @@ proc capslog::status {new {msg ""}} {
     }
 }
 
-proc capslog::onexit {cmd} {
+proc capslog::onexit {cmd {condition ""}} {
     variable cleanup
-    lappend cleanup $cmd
+    lappend cleanup [list $cmd $condition]
 }
 
 proc capslog::monitor {} {
@@ -115,6 +129,7 @@ proc capslog::monitor {} {
 proc capslog::output {cmd code str op} {
     variable fd
     variable demand
+    variable choice
     # Skip bitfield details
     if {[string equal -length 8 {        } $str]} return
     puts $fd $str
@@ -133,10 +148,10 @@ proc capslog::output {cmd code str op} {
 	}
 	if {[regexp {\s[0-9.,/-]+$} $str ps] && [string length $ps] > 100} {
 	    # Looks like PS=1 command output. We need PS=0.
-	    sercmd PS=0
+	    queuecmd PS=0
 	    # The requested priority message may have been missed
 	    if {$demand ne ""} {
-		sercmd PM=[expr {"0x$demand"}]
+		queuecmd PM=[expr {"0x$demand"}]
 	    }
 	}
 	return
@@ -150,16 +165,21 @@ proc capslog::output {cmd code str op} {
     } elseif {$src eq "R"} {
 	if {$demand ne "" && $id ne $demand} {
 	    # OTGW sent a different alternative message than requested. One
-	    # of the sides must have missed something. Request it again.
-	    sercmd PM=[expr {"0x$demand"}]
+	    # of the sides may have missed something. Request it again.
+	    queuecmd PM=[expr {"0x$demand"}]
 	}
     } elseif {$src eq "B"} {
 	dict incr msg(slave) $id
+	set n [expr {"0x$id"}]
+	if {$choice && $n == $choice} {
+	    # The UI command appears to have been lost
+	    queuecmd UI=$choice
+	}
 	if {$type == 7} {
-	    set n [expr {"0x$id"}]
 	    if {$n < 128} {dict incr msg(unknown) $id}
 	}
 	if {$id eq $demand} {
+	    # Allow time for the message back to the thermostat
 	    after 20 [namespace which next]
 	} elseif {$demand eq ""} {
 	    variable count
@@ -169,19 +189,25 @@ proc capslog::output {cmd code str op} {
 	    if {$state in {init reinit}} {
 		after cancel $afterid
 		status progress {collecting messages - 0%}
+		# Use whatever was collected, if not finished in 2 hours
+		set afterid [after 7200000 [namespace which stop]]
 	    }
 	    if {$count < 0} {
 		# Don't count
 	    } elseif {[incr count] >= $target} {
 		interim
-		next
+		if {[next]} {
+		    # This doesn't really remove the PM. But MsgID 0 should
+		    # happen frequently, which will clear the PM request flag.
+		    onexit PM=0 {$demand ne ""}
+		}
 	    } elseif {($count % 5) == 0} {
 		status progress [format {collecting messages - %d%%} \
 		  [expr {100 * $count / $target}]]
 	    }
 	    if {$count == 4 * $target / 5 && [dict size $msg(skipped)] == 0} {
 		# No skipped messages seen yet. Make sure OTGW is in GW mode.
-		sercmd PR=M
+		queuecmd PR=M
 	    }
 	}
     }
@@ -195,16 +221,19 @@ proc capslog::next {} {
 	set query [lassign $query demand]
 	if {[dict exists $msg(slave) $demand]} {tailcall next}
 	set id [expr {"0x$demand"}]
-	sercmd PM=$id
+	queuecmd PM=$id
 	status query "checking message ID $id"
+	return 1
     } else {
-	variable count -1
+	variable count -1 choice 0
 	set demand ""
 	after 5000 [namespace which stop]
+	return 0
     }
 }
 
 proc capslog::interim {} {
+    variable count
     variable wanted
     variable wronly
     variable msg
@@ -212,7 +241,7 @@ proc capslog::interim {} {
     if {$mode eq "M"} {
 	# Can't collect more data in monitor mode
 	# Switch to gateway mode
-	sercmd GW=1
+	queuecmd GW=1
 	onexit GW=0
 	# stop
 	# return
@@ -224,41 +253,83 @@ proc capslog::interim {} {
 	if {$n in $wronly} {
 	    if {[dict exists $msg(skipped) $id]} {
 		# This is requested by the thermostat, but replaced by the OTGW
-		# Temporarily instruct OTGW to send it to the boiler again
-		sercmd KI=$n
-		onexit UI=$n
+		# The OTGW cannot send Write-Data messages on demand, so just
+		# tell it to pass the thermostat message to the boiler again.
+		queuecmd KI=$n
+		# Arrange to mark the message as unknown when we're done. But
+		# only if the boiler accepted it. Then it was manually set.
+		onexit UI=$n [format {%d ni $msg(unknown)} $n]
 	    }
 	    continue
 	}
 	set id
     }]]
-    if {[dict size $msg(unknown)] == 0 && [dict size $msg(skipped)] == 0} {
-	# No slots available. Sacrifice a less important message
+    # Check the amount of unknown and skipped messages
+    set slots 0
+    foreach n {unknown skipped} {
+	dict for {key cnt} $msg($n) {incr slots $cnt}
+    }
+    # Looking for at least one slot in 60 messages
+    set threshold [expr {$count / 60}]
+    if {$slots <= $threshold} {
+	# Not enough slots available. Sacrifice a less important message
 	set messages [dict keys $msg(master)]
 	set counts [dict value $msg(master)]
 	set keys [lmap n [lsort -integer -indices -decreasing $counts] {
 	    lindex $messages $n
 	}]
-	variable count
 	variable needed
 	variable preferred
-	# Looking for a message that is requested at least once a minute
-	set choice 0
-	set threshold [expr {$count / 60}]
+	variable choice 0
 	foreach id $keys {
 	    set n [expr {"0x$id"}]
-	    if {$n in $needed} continue
+	    if {$n >= 128 || $n in $needed} continue
 	    if {[dict get $msg(master) $id] <= $threshold && $choice} break
 	    set choice $n
 	    if {$n in $preferred} continue
 	    break
 	}
 	if {$choice} {
-	    sercmd UI=$choice
+	    queuecmd UI=$choice
 	    onexit KI=$choice
 	} else {
+	    # Could not find a sacrificial message
 	    stop
 	}
+    }
+}
+
+# Execute commands in an idle callback so they will be entered into the log
+proc capslog::queuecmd {cmd} {
+    variable cmdqueue
+    if {[llength $cmdqueue] == 0} {
+	coroutine cmdqueuecoro sendcmdqueue
+    }
+    lappend cmdqueue $cmd
+}
+
+proc capslog::sendcmdqueue {} {
+    variable cmdqueue
+    after idle [list [info coroutine]]
+    yield
+    # New commands may be added to the queue while waiting for a response
+    while {[llength $cmdqueue]} {
+	set remain [lassign $cmdqueue cmd]
+	for {set i 0} {$i < 3} {incr i} {
+	    set ack [sercmd $cmd]
+	    if {[scan $ack {%2s: %s} op arg] == 2} {
+		if {[string equal -length 2 $op $cmd]} {
+		    if {$arg ni {NG SE NS BV NF OR OE}} break
+		} else {
+		    # Response may have happened during PS=1 output
+		    sercmd PS=0
+		}
+	    }
+	    if {$i == 2} {
+		stop 1 "communication failure"
+	    }
+	}
+	set cmdqueue $remain
     }
 }
 
