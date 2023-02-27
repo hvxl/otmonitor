@@ -3,19 +3,29 @@ namespace eval upgrade {
 }
 
 proc upgrade::readfw {file} {
+    puts [info level 0]
     global csize dsize cocmd copct
-    if {[catch {open $file} f]} {
+    if {[catch {open $file rb} f]} {
 	return [list failed "Error: $f"]
     }
     try {
+	# Check if the file is gzipped
 	set data [read $f 11]
 	binary scan $data su magic
+	if {$magic == 0x8b1f} {
+	    seek $f 0
+	    zlib push gunzip $f
+	    set data [read $f 11]
+	}
 	if {$magic == 0x1240} {
 	    set format cof
 	} elseif {[regexp {^:[[:xdigit:]]{10}} $data]} {
+	    binary scan $data su magic
 	    set format hex
 	    # A hex firmware file is around 32k max
 	    append data [read $f 65536]
+	} elseif {$magic == 0x8b1f} {
+	    throw {READFW FORMAT} "invalid file format"
 	} else {
 	    set format cod
 	}

@@ -2109,7 +2109,7 @@ proc gui::hexfile {} {
     set dir [file dirname [append cfg(firmware,hexfile) ""]]
     set name [file tail $cfg(firmware,hexfile)]
     set types {
-        {"Firmware files"       {.hex .cof .cod}}
+        {"Firmware files"       {.hex .hex.gz .cof .cod}}
         {"All files"            *}
     }
     set name [tk_getOpenFile -filetypes $types -defaultextension .hex \
