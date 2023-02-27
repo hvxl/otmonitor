@@ -33,10 +33,27 @@ proc diag::diagnostics {{version ""}} {
     ttk::scrollbar .diag.f.vs -command [list $text yview]
     $text configure -yscrollcommand {.diag.f.vs set}
     bindtags $text [list $text Diag Text [winfo toplevel $text] all]
+
+    set menu [menu $text.menu -tearoff 0]
+    $menu configure -postcommand [list [namespace which postmenu] $text $menu]
+    $menu add command -label Copy \
+      -command [list event generate $text <<Copy>>]
+    $menu add command -label Paste \
+      -command [list event generate $text <<Paste>>]
+    $menu add separator
+    $menu add command -label "Select All" \
+      -command [list event generate $text <<SelectAll>>]
+    $menu add separator
+    $menu add command -label "Clear Scrollback" \
+      -command [list $text delete 1.0 end]
+
     bind $text <Key> [list [namespace which keypress] %A]
     # Allow selecting and copying the text
     bind $text <<Copy>> {# Fall through}
+    bind $text <Control-a> {event generate %W <<SelectAll>>;break}
     bind $text <<SelectAll>> {# Fall through}
+    bind $text <<ContextMenu>> [list tk_popup $menu %X %Y]
+    bind $text <Menu> [list [namespace which contextmenu] $text]
     bind $text <Destroy> [list [namespace which finish]]
     grid $text .diag.f.vs -sticky news
     grid columnconfigure [winfo parent $text] $text -weight 1
@@ -53,6 +70,7 @@ proc diag::diagnostics {{version ""}} {
     $text tag configure fail -foreground purple
     $text mark set last insert
     $text mark gravity last left
+
     focus $text
 }
 
@@ -155,6 +173,19 @@ proc diag::keypress {char} {
 proc diag::cursor {w} {
     after idle [list $w mark set insert end]
     # after 500 [list $w mark set insert end]
+}
+
+proc diag::contextmenu {w} {
+    lassign [winfo pointerxy $w] x y
+    event generate $w <<ContextMenu>> -rootx $x -rooty $y
+}
+
+proc diag::postmenu {w menu} {
+    if {[llength [$w tag ranges sel]]} {
+	$menu entryconfigure Copy -state normal
+    } else {
+	$menu entryconfigure Copy -state disabled
+    }
 }
 
 proc diag::finish {} {
