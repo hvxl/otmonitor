@@ -13,6 +13,8 @@ try {
 
 package require matchbox
 package require search
+package require tooltip
+namespace import tooltip::tooltip
 
 include themes.tcl
 
@@ -98,7 +100,7 @@ namespace eval gui {
 	deltatemp	{statusvalue "Water temperature difference"}
     }
 
-    variable widget {} history {} histpos 0
+    variable widget {} history {} histpos 0 capsstatus ""
     variable base http://otgw.tclcode.com
     namespace ensemble create -unknown ::gui::passthrough \
       -subcommands {output tvtrace connected scroll}
@@ -2294,33 +2296,55 @@ proc gui::capsdlg {} {
     set var [namespace which -variable capsvar]
     ttk::label .caps.l1 -text "Boiler make and model:"
     ttk::matchbox .caps.e1 -width 40 -textvariable ${var}(boiler) \
-      -matchcommand [list [namespace which capsmatch] .caps.e1]
+      -matchcommand [list [namespace which capsmatch] .caps.e1] \
+      -validate focus -validatecommand [namespace which capswarning]
+    tooltip .caps.e1 "If your boiler is not listed in the\
+      drop down\nmenu, please manually enter its details."
     ttk::label .caps.l2 -text "Thermostat make and model:"
-    ttk::matchbox .caps.e2 -width 40 -textvariable ${var}(thermostat) \
-      -matchcommand [list [namespace which capsmatch] .caps.e2]
+    ttk::matchbox .caps.e2 -width 20 -textvariable ${var}(thermostat) \
+      -matchcommand [list [namespace which capsmatch] .caps.e2] \
+      -validate key -validatecommand [list [namespace which capswarning] %V %P]
+    tooltip .caps.e2 "If your thermostat is not listed in the\
+      drop down\nmenu, please manually enter its details.\nLeave\
+      empty if the OTGW runs stand-alone."
+    bind .caps.e2 <<ComboboxSelected>> [namespace which capswarning]
+    ttk::label .caps.w2 -image [img warn.png]
+    tooltip .caps.w2 "A thermostat was detected.\nPlease enter its details."
     ttk::label .caps.l3 -text "Email address:"
     ttk::entrybox .caps.e3 -width 40 -textvariable ${var}(email)
-    set wrap [expr {[winfo reqwidth .caps.l2] + [winfo reqwidth .caps.e2] + 10}]
-    ttk::label .caps.h -wraplength $wrap -anchor w -justify left -text "All\
-      fields are optional. The logfile will automatically be uploaded if you\
-      specify at least a boiler make and model."
+    tooltip .caps.e3 "The email address, if provided, will only be used\nin\
+      case of questions about the uploaded log file."
+    set wrap [expr {[winfo reqwidth .caps.l2] + [winfo reqwidth .caps.e1] + 10}]
+    ttk::label .caps.h -wraplength $wrap -anchor w -justify left \
+      -text [string trim {\
+	  All fields are optional. The log file will automatically be\
+	  uploaded if you specify make and model of the boiler and\
+	  thermostat, if present. Click "Help" for more information.\
+      }]
     ttk::frame .caps.buttons
-    ttk::button .caps.buttons.b1 -text Start -command [list gui getcaps .caps]
+    ttk::button .caps.buttons.b1 -width 8
+    ttk::button .caps.buttons.b2 -text Help -width 8 \
+      -command [list gui launch http://otgw.tclcode.com/equipment.html]
+    tooltip .caps.buttons.b2 "Open a web page with more detailed\ninformation\
+      in your default browser."
     ttk::label .caps.status \
       -textvariable [namespace which -variable capsstatus]
-    grid .caps.l1 .caps.e1 -sticky ew -padx 5 -pady 5
-    grid .caps.l2 .caps.e2 -sticky ew -padx 5 -pady 5
-    grid .caps.l3 .caps.e3 -sticky ew -padx 5 -pady 5
-    grid .caps.h -columnspan 2 -sticky ew -padx 5 -pady 5
-    grid .caps.buttons - -sticky ew -padx 5 -pady 5
+    grid .caps.l1 .caps.e1 - -sticky ew -padx 5 -pady 5
+    grid .caps.l2 .caps.e2 .caps.w2 -sticky ew -padx 5 -pady 5
+    grid .caps.w2 -padx {0 5}
+    grid remove .caps.w2
+    grid .caps.l3 .caps.e3 - -sticky ew -padx 5 -pady 5
+    grid .caps.h -columnspan 3 -sticky ew -padx 5 -pady 5
+    grid .caps.buttons - - -sticky ew -padx 5 -pady 5
     grid anchor .caps.buttons center
-    grid .caps.buttons.b1
-    grid [ttk::separator .caps.sep] - -sticky ew -padx 3
-    grid .caps.status - -sticky ew -padx 5 -pady 5
-
+    grid .caps.buttons.b1 .caps.buttons.b2 -padx 5
+    grid [ttk::separator .caps.sep] - - -sticky ew -padx 3
+    grid .caps.status - - -sticky ew -padx 5 -pady 5
+    grid columnconfigure .caps .caps.e2 -weight 1
     ::tk::PlaceWindow .caps widget .
     wm resizable .caps 0 0
 
+    capsstatus idle $capsstatus
     coroutine capscoro capslist .caps.e1 .caps.e2
 }
 
@@ -2338,14 +2362,17 @@ proc gui::capsstatus {state message} {
 	if {$state eq "idle"} {
 	    .caps.buttons.b1 configure -text Start \
 	      -command [list gui getcaps .caps]
+	    tooltip .caps.buttons.b1 "Start the data collection process\
+	      (usually\ncompletes in under 45 minutes)."
+	    grid remove .caps.w2
 	    wm protocol .caps WM_DELETE_WINDOW {}
 	    bind .caps <Destroy> {}
 	} elseif {$state eq "done"} {
 	    set boiler [.caps.e1 get]
-	    if {$boiler ne ""} {
+	    set thermostat [.caps.e2 get]
+	    if {$boiler ne "" && ($thermostat ne "" || ![capslog master 1])} {
 		variable base
 		set args [list boiler $boiler]
-		set thermostat [.caps.e2 get]
 		if {$thermostat ne ""} {lappend args thermostat $thermostat}
 		set email [.caps.e3 get]
 		if {$email ne ""} {lappend args email $email}
@@ -2356,6 +2383,9 @@ proc gui::capsstatus {state message} {
 	} else {
 	    .caps.buttons.b1 configure -text Abort \
 	      -command [list capslog abort]
+	    tooltip .caps.buttons.b1 "Abort the data collection\
+	      process.\nAll collected data will be discarded."
+	    capswarning
 	}
     }
 }
@@ -2391,6 +2421,21 @@ proc gui::capsmatch {e str} {
     }
 }
 
+proc gui::capswarning {{type forced} {str ""}} {
+    # Show a warning if all of the following apply:
+    # * A thermostat has been detected
+    # * Boiler details have been entered
+    # * Thermostat details have not been entered
+    # * The thermostat entry doesn't have focus?
+    if {$type ne "key"} {set str [.caps.e2 get]}
+    if {$str eq "" && [.caps.e1 get] ne "" && [capslog master]} {
+	grid .caps.w2
+    } else {
+	grid remove .caps.w2
+    }
+    return 1
+}
+
 proc gui::customize {f list rst} {
     global cfg
     variable statusdef
@@ -2400,6 +2445,21 @@ proc gui::customize {f list rst} {
 	set cfg(status,$list) $rst
     }
     tailcall customize::dlg cfg(status,$list) $f $statusdef $rst
+}
+
+proc gui::launch {url} {
+    # open is the OS X equivalent to xdg-open on Linux, start is used on Windows
+    foreach browser {xdg-open open {start {}}} {
+	set args [lassign $browser cmd]
+	set command [auto_execok $cmd]
+	if {[llength $command]} {
+	    if {[catch {exec {*}$command {*}$args $url &} error]} {
+		return -code error "couldn't execute '$command': $error"
+	    }
+	    return
+	}
+    }
+    return -code error "couldn't find browser"
 }
 
 interp alias {} fwstatus {} setstatus fwstatus

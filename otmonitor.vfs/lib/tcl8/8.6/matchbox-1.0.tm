@@ -215,13 +215,13 @@ namespace eval ::ttk::matchbox {
 
     method delete {args} {
 	set rc [theWidget delete {*}$args]
-	my Update
+	after idle [list [namespace which my] Update]
 	return $rc
     }
 
     method insert {index value} {
 	set rc [theWidget insert $index $value]
-	my Update
+	after idle [list [namespace which my] Update]
 	return $rc
     }
 

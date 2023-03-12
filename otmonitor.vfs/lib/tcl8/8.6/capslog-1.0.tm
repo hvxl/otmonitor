@@ -1,6 +1,6 @@
 namespace eval capslog {
     namespace ensemble create \
-      -subcommands {start stop track abort upload} -map {abort {stop 1}}
+      -subcommands {start stop track abort upload master} -map {abort {stop 1}}
     variable file ""
     variable cleanup {}
     variable cmdqueue {}
@@ -93,7 +93,7 @@ proc capslog::status {new {msg ""}} {
     if {$msg ne ""} {set message $msg}
     set index 0
     foreach n $handlers {
-	if {[catch {uplevel #0 [linsert $n end $state $message]}]} {
+	if {[catch {uplevel #0 [linsert $n end $new $message]} err]} {
 	    # Remove bad handlers
 	    set handlers [lreplace $handlers $index $index]
 	} else {
@@ -354,4 +354,11 @@ proc capslog::upload {url args} {
 	    # puts [dict get $info -errorinfo]
 	}
     }
+}
+
+proc capslog::master {{strict 0}} {
+    variable msg
+    variable state
+    if {!$strict && $state in {idle done}} {return 0}
+    return [expr {[info exists msg(master)] && [dict size $msg(master)] > 0}]
 }
