@@ -211,7 +211,7 @@ proc mqttstatus {topic data retained {prop {}}} {
     }
 }
 
-proc mqttaction {topic data retain props args} {
+proc mqttaction {topic data retain {props {}} args} {
     global cfg mqttactions actionid
     if {[dict exists $props ResponseTopic]} {
 	# To be able to provide a response, the proc must run as a coroutine
