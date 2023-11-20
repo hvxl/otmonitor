@@ -109,6 +109,7 @@ set xlate {
     controlsp		"Control setpoint"
     controlsp2		"Control setpoint 2"
     coolingenable	"Cooling enable"
+    coolinghours	"Cooling hours"
     coolingstatus	"Cooling status"
     diag		"Diagnostic indication"
     dhwbh		"DHW burner hours"
@@ -132,6 +133,8 @@ set xlate {
     otcstate		"Outside temp compensation"
     outside		"Outside temperature"
     override    	"Rem override room setpoint"
+    override2    	"Rem override room setpt 2"
+    powercycles		"Power cycles"
     returntemp		"Return water temperature"
     setpoint		"Room setpoint"
     setpoint2		"Room setpoint 2"
@@ -259,9 +262,12 @@ set signals {
     ReturnWaterTemperature	{temp		float}
     CHWaterPresure		{bar		float}
     RemoteOverrideRoomSetpoint	{temp		float}
+    RemoteOverrideRoomSetpoint2	{temp		float}
     CHWaterDeltaT		{temp		float}
     ExhaustTemperature		{temp		float}
     DHWFlowRate			{rate		float}
+    CoolingHours		{count		unsigned}
+    PowerCycles			{count		unsigned}
     CHBurnerStarts		{count		unsigned}
     CHPumpStarts		{count		unsigned}
     DHWPumpStarts 		{count		unsigned}
@@ -2522,6 +2528,7 @@ special 4 28 guifloat returntemp returnwatertemperature
 special 1 1 guifloat controlsp controlsetpoint
 special 1 8 guifloat controlsp2 controlsetpoint2
 special 4 9 guifloat override remoteoverrideroomsetpoint
+special 4 39 guifloat override2 remoteoverrideroomsetpoint2
 special 1 56 guifloat dhwsetpoint dhwsetpoint
 special 4 56 guifloat dhwsetpoint dhwsetpoint
 special 1 57 guifloat chwsetpoint chsetpoint
@@ -2549,6 +2556,8 @@ special 0 101 mastersolar
 special 4 101 slavesolar
 special 4 19 guifloat dhwflowrate dhwflowrate
 special 4 33 guisigned exhausttemp exhausttemperature
+special 4 96 guishort coolinghours coolinghours
+special 4 97 guishort powercycles powercycles
 special 4 116 guishort chbs chburnerstarts
 special 4 117 guishort chps chpumpstarts
 special 4 118 guishort dhwps dhwpumpstarts
@@ -2581,6 +2590,9 @@ register 3	{flag8 u8}	"Slave configuration"
 register 74	{flag8 u8}	"Configuration/memberid V/H"
 register 75	{f8.8}		"OpenTherm version V/H"
 register 76	{u8 u8}		"Product version V/H"
+register 93	{u8 u8}		"Brand"
+register 94	{u8 u8}		"Brand version"
+register 95	{u8 u8}		"Brand serial number"
 register 103	{flag8 u8}	"Solar storage config/memberid"
 register 104	{u8 u8}		"Solar storage product version"
 register 124	{f8.8}		"OpenTherm version Master"
@@ -2624,6 +2636,8 @@ register 82	{f8.8}		"Exhaust inlet temperature"
 register 83	{f8.8}		"Exhaust outlet temperature"
 register 84	{u16}		"Exhaust fan speed"
 register 85	{u16}		"Inlet fan speed"
+register 96	{u16}		"Cooling operation hours"
+register 97	{u16}		"Power cycles"
 register 98	{sensor}	"RF sensor status information"
 register 99	{opmode}	"Operating mode HC1, HC2, DHW"
 register 109	{u16}		"Electricity producer starts"
@@ -2683,6 +2697,7 @@ register 7	{f8.8}		"Cooling control signal"
 register 9	{f8.8}		"Remote override room setpoint"
 register 14	{f8.8}		"Maximum relative modulation level"
 register 15	{u8 u8}		"Boiler capacity and modulation limits"
+register 39	{f8.8}		"Remote override room setpoint 2"
 register 100	{nu flag8}	"Remote override function"
 
 if {$firmware ne ""} {
