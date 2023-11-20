@@ -18,7 +18,7 @@ set gwmode Unknown
 set midbit 1
 set docpath {}
 set restore -1
-set span 7200
+# set span 7200; Change in config file
 set cmdline [linsert $argv 0 [file normalize $argv0]]
 set wibblesock {}
 set userauth {{} {mtime 0}}
@@ -2207,7 +2207,7 @@ getopt flag arg $argv {
 	    set optcfg(connection,type) file
 	    set optcfg(connection,device) $fn
 	    set optcfg(connection,enable) true
-	    set span 86400
+	    set optcfg(view,span) 86400
 	} else {
 	    set optcfg(connection,type) serial
 	    set optcfg(connection,device) $fn
@@ -2224,6 +2224,7 @@ array set cfg {
     view,bitflags	false
     view,messageid	false
     view,resumelog	false
+    view,span		7200
     datalog,file	otdata.txt
     datalog,enable	false
     datalog,append	false
@@ -2378,6 +2379,8 @@ foreach n [array names optcfg] {
     set cfg($n) $optcfg($n)
 }
 array unset optcfg
+
+set span $cfg(view,span)
 
 if {$cfg(connection,type) eq "file"} {
     # When reading messages from file some options don't make sense

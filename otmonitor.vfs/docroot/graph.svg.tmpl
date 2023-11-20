@@ -1,6 +1,6 @@
-% global track start gui graph graphdef theme timestamp
+% global track start gui graph graphdef theme timestamp span
 % set now $timestamp
-% set maxx [expr {min(1440, ($now - $start) / 5.) + 25}]
+% set maxx [expr {min($span, $now - $start) / 5. + 25}]
 % if {[info exists graph]} {
 % } elseif {[info exists gui(ch2)] && $gui(ch2)} {
 %     set graph $graphdef
@@ -51,8 +51,9 @@ svg {
 // Clock difference between server and client
 const skew = [clock milliseconds] - Date.now()
 // Start time of the graph
-var start = [expr {max($start, $now - 7200) * 1000}]
+var start = [expr {max($start, $now - $span) * 1000}]
 var ref = performance.timeOrigin + skew - start
+var span = $span
 </script>
 <script href="graph.js"></script>
 <!-- Vertical lines -->
@@ -60,7 +61,7 @@ var ref = performance.timeOrigin + skew - start
 % set x [expr {$maxx - ($now % 300) / 5.}]
 % while {$x > 25} {
 %     set time [clock format $sec -format %H:%M]
-%     set mark [expr {$sec / 300 % 24}]
+%     set mark [expr {$sec / 300 % ($span / 300)}]
 <polyline id="marker$mark" class="vgrid" points="$x 0 $x $height" style="stroke: #eee; fill: none;"/>
 <text id="label$mark" class="time" x="$x" y="[expr {$height - 2}]" text-anchor="middle" style="fill: black; font-family: DejaVu Sans; font-size: 10px;">$time</text>
 %     set x [expr {$x - 60}]

@@ -7,6 +7,8 @@ var refresh
 var ref
 var start
 start = start || Date.now()
+var span
+span = span || 7200
 
 const margin = 25
 const ns = "http://www.w3.org/2000/svg"
@@ -39,7 +41,7 @@ function svginit() {
     // Adjust the time strings, in case the server has a different time zone
     let now = Date.now()
     for (let ms = Math.ceil(start / 300000) * 300000; ms < now; ms += 300000) {
-	let text = svg.getElementById("label" + (Math.round(ms / 300000) % 24))
+	let text = svg.getElementById("label" + (Math.round(ms / 300000) % (span / 300)))
 	if (text) {
 	    text.textContent = timefmt.format(ms)
 	}
@@ -62,8 +64,8 @@ function scroll(ms) {
     // Expect a multiple of 5 seconds
     let now = new Date(start + pos)
     // Limit the graph to 2 hours
-    if (pos > 7200000) {
-	let dt = pos - 7200000
+    if (pos > span * 1000) {
+	let dt = pos - span * 1000
 	start += dt
 	ref -= dt
 	let dx = dt / 5000
@@ -99,9 +101,9 @@ function scroll(ms) {
 	    }
 	}
     }
-    if (width < 1440 + margin) {
+    if (width < span / 5 + margin) {
 	// Calculate the new width
-	width = Math.min(1440, Math.round(pos / 5000)) + margin
+	width = Math.min(span / 5, Math.round(pos / 5000)) + margin
 	// Resize the image
 	svg.setAttribute("width", Math.max(220, width))
 	// Extend the horizontal grid lines
@@ -115,7 +117,7 @@ function scroll(ms) {
     let marktime = new Date(Math.floor(now.getTime() / 300000) * 300000)
     // Multiple markers may have been missed while the browser tab was inactive
     while (marktime >= start) {
-	let mark = Math.round(marktime.getTime() / 300000) % 24
+	let mark = Math.round(marktime.getTime() / 300000) % (span / 300)
 	let name = "marker" + mark
 	let line = svg.getElementById(name)
 	let x = (marktime.getTime() - start) / 5000 + margin
