@@ -1,6 +1,13 @@
 FROM cgr.dev/chainguard/wolfi-base
 
-RUN mkdir /app /data
-COPY ./otmonitor-x64 /app/otmonitor
+MAINTAINER Schelte Bron otgw@tclcode.com
 
-CMD ["/app/otmonitor", "--daemon", "-w8080", "-f/data/otmonitor.conf"]
+RUN apk add tzdata
+RUN mkdir -p /usr/local/bin /data /log
+COPY ./otmonitor-x64 /usr/local/bin/otmonitor
+
+EXPOSE 8080
+
+ENTRYPOINT ["otmonitor", "--daemon", "-f/data/otmonitor.conf"]
+CMD ["-w8080"]
+WORKDIR /log
