@@ -13,10 +13,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Get sdx kit
-        env:
-          SDXURL: "https://chiselapp.com/\
-            user/aspect/repository/sdx/uv/sdx-20110317.kit"
-        run: curl $SDXURL --output sdx.kit
+        run: curl ${{vars.DOWNLOADURL}}/sdx-20110317.kit --output sdx.kit
 
       - name: Download tclkits
         run: |
