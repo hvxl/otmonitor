@@ -1106,6 +1106,7 @@ proc reportvalue {name val} {
 proc dump {} {
     global gui cfg
     after cancel dump
+    if {!$cfg(datalog,enable)} return
     set now [clock milliseconds]
     set wait [expr {$cfg(datalog,interval) - $now % $cfg(datalog,interval)}]
     after $wait dump
@@ -2451,6 +2452,7 @@ if {$firmware eq ""} {
 
     # Datalog
     if {$cfg(datalog,enable)} dump
+    trace add variable cfg(datalog,enable) write {apply {{var arg op} {dump}}}
 
     # Web server
     if {$cfg(web,enable)} {

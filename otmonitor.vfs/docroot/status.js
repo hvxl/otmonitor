@@ -100,10 +100,16 @@ function change(id, value) {
 	    if (e.type == "checkbox") {
 		e.checked = (value === 'true' || value === '1');
 	    }
-	    if (e.type == "text" || e.type == "number") {
+	    if (e.type == "text") {
 		e.value = value;
 		//e.onchange();
 	    }
+            if (e.type == "number") {
+                if (e.hasAttribute("factor")) {
+                    value = Number(value) / Number(e.getAttribute("factor"));
+                }
+                e.value = value;
+            }
 	    if (e.type == "range") {
 		e.value = value;
 		e.onchange();
@@ -177,11 +183,11 @@ function flag(w, section, name) {
 }
 
 function input(w, section, name) {
-    config(section, name, w.value);
-}
-
-function seconds(w, section, name) {
-    config(section, name, w.value * 1000);
+    let value = w.value;
+    if (w.type == "number" && w.hasAttribute("factor")) {
+        value = Number(value) * Number(w.getAttribute("factor"));
+    }
+    config(section, name, value);
 }
 
 function sync(w, id) {

@@ -687,7 +687,7 @@ proc gui::datafile {} {
     set file [selfile $cfg(datalog,file)]
     if {$file ne ""} {
 	set cfg(datalog,file) $file
-	cfgdatalog
+	dump
     }
 }
 
@@ -1757,8 +1757,7 @@ proc gui::cfglogging {w} {
     pack $w.f1 -fill x -side top
 
     ttk::checkbutton $w.c3 -text "Datafile" \
-      -variable cfg(datalog,enable) -onvalue true -offvalue false \
-      -command [namespace code cfgdatalog]
+      -variable cfg(datalog,enable) -onvalue true -offvalue false
     ttk::labelframe $w.f2 -labelwidget $w.c3
     ttk::label $w.f2.l1 -text "File name:"
     ttk::entrybox $w.f2.e1 -textvariable cfg(datalog,file)
@@ -1786,11 +1785,6 @@ proc gui::cfglogging {w} {
     trace add variable trc(datalog,interval) write $cmd
     bind $w.f2.e2 <Destroy> \
       [list trace remove variable trc(datalog,interval) write $cmd]
-}
-
-proc gui::cfgdatalog {} {
-    global cfg
-    if {$cfg(datalog,enable)} dump
 }
 
 proc gui::loginterval {w val} {

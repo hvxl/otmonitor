@@ -13,7 +13,9 @@ var query = {"var": "cfg"};
 <input type="checkbox" id="view,bitflags" [checked cfg(view,bitflags)] onchange="flag(this, 'view', 'bitflags')">
 <label for="view,bitflags">Include details of bit fields</label><br>
 <input type="checkbox" id="view,messageid" [checked cfg(view,messageid)] onchange="flag(this, 'view', 'messageid')">
-<label for="view,messageid">Include message ID</label>
+<label for="view,messageid">Include message ID</label><br>
+<input type="checkbox" id="view,resumelog" [checked cfg(view,resumelog)] onchange="flag(this, 'view', 'resumelog')">
+<label for="view,resumelog">Resume normal logging after a summary report</label><br>
 <fieldset>
 <legend>
 <input type="checkbox" id="logfile,enable" [checked cfg(logfile,enable)] onchange="flag(this, 'logfile', 'enable')">
@@ -65,7 +67,7 @@ File&nbsp;name:
 Interval:
 </td>
 <td colspan="2">
-<input type="number" style="width: 8em;" id="datalog,interval" min="1" max="86400" value="[expr {$cfg(datalog,interval) / 1000}]" step="1" onchange="seconds(this, 'datalog', 'interval')">
+<input type="number" style="width: 8em;" id="datalog,interval" min="1" max="86400" factor="1000" value="[expr {$cfg(datalog,interval) / 1000}]" step="1" onchange="input(this, 'datalog', 'interval')">
 </tr>
 <tr>
 <td colspan="2">
