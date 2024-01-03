@@ -22,6 +22,8 @@ proc upgrade::readfw {file} {
 	} elseif {[regexp {^:[[:xdigit:]]{10}} $data]} {
 	    binary scan $data su magic
 	    set format hex
+	    # A hex firmware file generated on Windows has crlf line endings
+	    fconfigure $f -translation auto
 	    # A hex firmware file is around 32k max
 	    append data [read $f 65536]
 	} elseif {$magic == 0x8b1f} {
