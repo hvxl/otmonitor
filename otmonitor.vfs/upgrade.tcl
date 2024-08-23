@@ -848,8 +848,60 @@ namespace eval flash {
 	start status check init manual progress go done
     }
 
-    proc start {} {
-	coroutine coro upgrade loadfw [namespace current]
+    proc corovwait {varname {timeout 5000} {default 0}} {
+	upvar 1 $varname var
+	set cmd [list apply [list {cmd args} {
+	    uplevel #0 $cmd
+        }] [list [info coroutine] vwait]]
+	set id [after $timeout [list [info coroutine] timeout]]
+	trace add variable var write $cmd
+	set result [yield]
+	after cancel $id
+	trace remove variable var write $cmd
+	if {$result eq "vwait"} {
+	    return $var
+	} else {
+	    return $default
+	}
+    }
+
+    proc start {firmware} {
+	coroutine coro try [list [namespace which loadfirmware] $firmware] \
+	  on error {msg} {
+	    puts stderr "Firmware upgrade failed: $msg"
+	} finally {
+	    exit 1
+	}
+    }
+
+    proc loadfirmware {firmware} {
+	global fwversion connected
+	set id [after 5000 {set fwversion 0}]
+	if {![corovwait connected]} {
+	    puts stderr "Failed to connect to the OTGW"
+	    exit 1
+	}
+	puts -nonewline stderr "Current firmware version: "
+	if {[corovwait fwversion] == 0} {
+	    set tries 0
+	    while {[sercmd PR=A] in {SE}} {
+		if {[incr tries] > 3} break
+	    }
+	}
+	if {$fwversion == 0} {
+	    puts stderr unknown
+	} else {
+	    puts stderr $fwversion
+	}
+	lassign [upgrade readfw $firmware] result arg
+	if {$result eq "success"} {
+	    puts stderr "Target firmware version: $upgrade::upversion"
+	    set restore $arg
+	    upgrade loadfw [namespace current]
+	    exit 0
+	} else {
+	    return -code error $arg
+	}
     }
 
     proc status {msg} {

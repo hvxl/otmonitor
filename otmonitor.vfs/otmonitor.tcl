@@ -2707,24 +2707,8 @@ register 100	{nu flag8}	"Remote override function"
 
 if {$firmware ne ""} {
     include upgrade.tcl
-    puts -nonewline stderr "Current firmware version: "
-    set id [after 5000 {set fwversion 0}]
-    vwait fwversion
-    if {$fwversion == 0} {
-	puts stderr unknown
-    } else {
-	puts stderr $fwversion
-    }
-    lassign [upgrade readfw $firmware] result arg
-    if {$result eq "success"} {
-	puts stderr "Target firmware version: $upgrade::fwversion"
-	set restore $arg
-	flash start
-	vwait forever
-    } else {
-	puts $arg
-	exit 1
-    }
+    flash start $firmware
+    vwait forever
 }
 
 include dbus.tcl
