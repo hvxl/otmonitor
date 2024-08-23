@@ -3,7 +3,6 @@ namespace eval upgrade {
 }
 
 proc upgrade::readfw {file} {
-    puts [info level 0]
     global csize dsize cocmd copct
     if {[catch {open $file rb} f]} {
 	return [list failed "Error: $f"]
