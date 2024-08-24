@@ -375,8 +375,8 @@ proc upgrade::loadfw {cmd} {
 	# Lock the OTGW connection, preventing others from sending commands
 	if {![lock upgrade]} return
 	$cmd init
-	set handler [fileevent $dev readable]
-	set config [fconfigure $dev]
+	# set handler [fileevent $dev readable]
+	# set config [fconfigure $dev]
 	fconfigure $dev -translation binary -buffering none
     } trap {TCL LOOKUP CHANNEL} err {
 	debug $err
