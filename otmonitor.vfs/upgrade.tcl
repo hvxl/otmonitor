@@ -361,23 +361,38 @@ proc upgrade::loadfw {cmd} {
     variable upversion
     variable eeold
     variable eenew
+    puts stderr "In loadfw (cmd = $cmd)"
     set ans ""
     foreach inst [dict get $mem code] {mask match} [dict get $pic magic] {
 	if {$mask eq ""} break
+	puts stderr [format "Checking the firmware: %#x & %#x == %#x" \
+	  $inst $mask $match]
 	if {($inst & $mask) != $match} {
+	    puts stderr "Requesting confirmation from the user"
 	    set ans [$cmd check magic]
 	    if {$ans ne "ok"} {return abort}
 	    break
 	}
 	lappend prog $match
     }
+    puts stderr "All checks passed"
     try {
 	# Lock the OTGW connection, preventing others from sending commands
-	if {![lock upgrade]} return
+	puts stderr "Locking the connection to the OTGW"
+	if {![lock upgrade]} {
+	    puts stderr "Failed to lock the connection"
+	    return
+	}
+	puts stderr "Performing initialization"
 	$cmd init
+	puts stderr "Configuring the device"
 	set handler [fileevent $dev readable]
 	set config [fconfigure $dev]
 	fconfigure $dev -translation binary -buffering none
+	puts stderr "Channel configuration:"
+	foreach {key val} [fconfigure $dev] {
+	    puts stderr "    $key = $val"
+	}
     } trap {TCL LOOKUP CHANNEL} err {
 	debug $err
 	$cmd status "Firmware update failed - not connected"
@@ -391,6 +406,7 @@ proc upgrade::loadfw {cmd} {
 	unlock upgrade
 	return failed
     }
+    puts stderr "Starting the upgrade"
     set retries 0
     set errors 0
     try {
@@ -897,6 +913,7 @@ namespace eval flash {
 	if {$result eq "success"} {
 	    puts stderr "Target firmware version: $upgrade::upversion"
 	    set restore $arg
+	    puts stderr "Calling the loadfw proc"
 	    upgrade loadfw [namespace current]
 	    exit 0
 	} else {
