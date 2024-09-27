@@ -1037,7 +1037,7 @@ proc gui::configsel {w text} {
 }
 
 proc gui::cfgtemp {w} {
-    global gui setpt
+    global gui setpt fwversion
     ttk::labelframe $w.f1 -text "Setpoint"
         grid $w.f1 -sticky ew -padx 6 -pady 4
     ttk::scale $w.f1.s -from 5 -to 30 \
@@ -1058,6 +1058,28 @@ proc gui::cfgtemp {w} {
     grid $w.f1.f - -sticky ew -padx 0 -pady 6
     grid columnconfigure $w.f1 $w.f1.s -weight 1
     pack $w.f1 -fill x -side top
+
+    ttk::labelframe $w.f3 -text "Operating mode"
+    ttk::label $w.f3.l1 -text Heating:
+    ttk::combobox $w.f3.b1 -state readonly -width 12 -values {
+	"No override" "Auto" "Comfort" "Precomfort"
+	"Reduced" "Protection" "Off"
+    }
+    $w.f3.b1 current 0
+    bind $w.f3.b1 <<ComboboxSelected>> {sercmd MH=[%W current]}
+    ttk::label $w.f3.l2 -text DHW:
+    ttk::combobox $w.f3.b2 -state readonly -width 15 -values {
+	"No override" "Auto" "Anti-Legionella"
+	"Comfort" "Reduced" "Protection" "Off"
+    }
+    $w.f3.b2 current 0
+    bind $w.f3.b2 <<ComboboxSelected>> {sercmd MW=[%W current]}
+    grid $w.f3.l1 $w.f3.b1 $w.f3.l2 $w.f3.b2 -sticky w -pady 6
+    grid $w.f3.l1 $w.f3.b2 -padx 6
+    grid columnconfigure $w.f3 $w.f3.b1 -weight 1
+    if {[package vsatisfies $fwversion 6.2]} {
+	pack $w.f3 -fill x -side top -pady {8 0}
+    }
 
     ttk::labelframe $w.f2 -text "Clock"
     ttk::label $w.f2.l1 -text "Current time:"
