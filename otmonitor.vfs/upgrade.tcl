@@ -178,7 +178,7 @@ proc upgrade::process {} {
     set data [lsearch -all -inline -exact -not [dict get $mem data] {}]
     set list [split [binary format c* $data] \0]
     set rec [lsearch -inline $list {*OpenTherm Gateway*}]
-    set rec [string trimleft $rec A=]
+    set rec [regsub {.*?A=} $rec {}]
     scan $rec {OpenTherm Gateway %s} upversion
     if {$fwvariant eq "gateway"} {
 	variable eeold [eeprom $fwversion]
@@ -666,7 +666,7 @@ proc upgrade::eeprom {version} {
 	4.0a9 4.0a9.1 4.0a10 4.0a11 4.0a11.1 4.0a11.2 4.0a12
     }
     if {$version ni $supported && \
-      ![package vsatisfies $version 4.0b0-5.9 6.0-6.6]} {
+      ![package vsatisfies $version 4.0b0-5.9 6.0-6.7]} {
 	return {}
     }
     set rc {
@@ -694,7 +694,7 @@ proc upgrade::eeprom {version} {
 	Configuration {
 	    address	0x0e
 	    size	1
-	    mask	0x3d
+	    mask	0x7d
 	}
 	DHWSetpoint {
 	    address	0x0f
@@ -703,6 +703,10 @@ proc upgrade::eeprom {version} {
 	MaxCHSetpoint {
 	    address	0x11
 	    size	2
+	}
+	MessageInterval {
+	    address	0x13
+	    size	1
 	}
 	UnknownFlags {
 	    address	0xd0
@@ -778,12 +782,20 @@ proc upgrade::eeprom {version} {
     } elseif {![package vsatisfies $version 6.3-]} {
 	# SummerMode was added in firmware 6.3
 	dict set rc Configuration mask 0x35
+    } elseif {![package vsatisfies $version 6.5.7-]} {
+	# NoFailSafe was added in firmware 6.5.7
+	dict set rc Configuration mask 0x3d
     }
 
     # MaxCHSetpoint and DHWSetpoint were introduced in firmware 5.5 and 6.2
     if {![package vsatisfies $version 5.5 6.2-]} {
 	dict unset rc DHWSetpoint
 	dict unset rc MaxCHSetpoint
+    }
+
+    # MessageInterval was introduced in firmware 6.5.5
+    if {![package vsatisfies $version 6.5.5-]} {
+	dict unset rc MessageInterval
     }
 
     return $rc

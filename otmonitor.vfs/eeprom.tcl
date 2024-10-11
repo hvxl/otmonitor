@@ -20,7 +20,8 @@ proc gui::eeprom::gui {w} {
     pack $w.set.t -fill both -expand 1 -padx 4 -pady 4
     foreach n {
 	Configuration ThermostatModel AwaySetpoint DHWSetpoint MaxCHSetpoint
-	SavedSettings FunctionLED FunctionGPIO AlternativeCmd UnknownFlags
+	MessageInterval SavedSettings FunctionLED FunctionGPIO AlternativeCmd
+	UnknownFlags
     } {
 	if {[dict exists $eeprom $n value]} {
 	    [string tolower $n] $w.set.t [dict get $eeprom $n]
@@ -127,6 +128,11 @@ proc gui::eeprom::thermostatmodel {w data} {
     $w insert end "Thermostat model:\t$model\n"
 }
 
+proc gui::eeprom::messageinterval {w data} {
+    set val [dict get $data value]
+    $w insert end "Message Interval:\t[expr {$val * 5}]\n"
+}
+
 proc gui::eeprom::alternativecmd {w data} {
     set list [lsearch -all -inline -exact -not [dict get $data value] 0]
     $w insert end "Alternative IDs:\t[join $list {, }]\n"
@@ -162,5 +168,9 @@ proc gui::eeprom::configuration {w data} {
     if {$mask & 8} {
 	set mode [expr {$val & 8}]
 	$w insert end "Force summer mode:\t[bool $mode]\n"
+    }
+    if {$mask & 0x40} {
+	set fs [expr {!($val & 0x40)}]
+	$w insert end "Fail safe fallback:\t[bool $fs]\n"
     }
 }
