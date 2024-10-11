@@ -66,6 +66,37 @@ var query = {"var": "cfg"};
 </table>
 </fieldset>
 <fieldset>
+<legend>Operating mode</legend>
+<table>
+<tr>
+<td>Heating:</td>
+<td>
+<select id="modech" onchange="setting(this, 'MH')">
+<option value="0">No override</option>
+<option value="1">Auto</option>
+<option value="2">Comfort</option>
+<option value="3">Precomfort</option>
+<option value="4">Reduced</option>
+<option value="5">Protection</option>
+<option value="6">Off</option>
+</select>
+<td width="50%"></td>
+</td>
+<td>DHW:</td>
+<td>
+<select id="modedhw" onchange="setting(this, 'MW')">
+<option value="0">No override</option>
+<option value="1">Auto</option>
+<option value="2">Anti-Legionella</option>
+<option value="3">Comfort</option>
+<option value="4">Reduced</option>
+<option value="5">Protection</option>
+<option value="6">Off</option>
+</td>
+</tr>
+</table>
+</fieldset>
+<fieldset>
 <legend>Clock</legend>
 Current time:
 <span id="clock"><noscript>Who knows</noscript></span>
