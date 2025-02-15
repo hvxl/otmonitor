@@ -61,6 +61,7 @@ set functions {
     E	"Transmission error"
     M	"Boiler requires maintenance"
     P	"Raised power mode active"
+    D	"Disabled"
 }
 
 set gpiofunc {
