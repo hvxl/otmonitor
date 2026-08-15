@@ -3,7 +3,7 @@
 # Opentherm monitor utility.
 # For more information, see http://otgw.tclcode.com/otmonitor.html
 
-set version 6.6
+set version 6.7
 set reportflags 0
 set appendlog 0
 set setpt 20.00
@@ -1510,6 +1510,7 @@ proc connectcoro {type} {
 	    } elseif {$cfg(connection,type) eq "file"} {
 		set dev [open $cfg(connection,device)]
 		set devtype file
+		seek $dev [incr filepos 0]
 		# Disable some functionality when processing a log file
 		array set cfg {
 		    logfile,enable	false
@@ -1550,6 +1551,10 @@ proc connectcoro {type} {
 	    # Make sure data is flushed before closing
 	    if {[catch {fconfigure $dev -blocking 1} err errinfo]} {
 		surprise $errinfo
+	    }
+	    if {$devtype eq "file"} {
+		# Remember the file position to allow resuming
+		set filepos [tell $dev]
 	    }
 	    if {[catch {close $dev} err errinfo]} {
 		surprise $errinfo
@@ -1750,11 +1755,16 @@ proc iac {flag option} {
 proc filedata {endtime} {
     global dev start connected
     connected true
+    set pos [tell $dev]
     # Check if the file is gzipped
     binary scan [read $dev 2] Su* magic
     seek $dev 0
-    if {$magic == 0x1f8b} {zlib push gunzip $dev}
+    if {$magic == 0x1f8b} {
+	zlib push gunzip $dev
+	set pos 0
+    }
     lassign [fileanal] def tsfmt
+    if {$pos} {seek $dev $pos}
     set base [clock add $endtime -6 hours]
     set last 0
     while {$connected && [gets $dev line] != -1} {
