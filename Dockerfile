@@ -1,6 +1,6 @@
 FROM cgr.dev/chainguard/wolfi-base
 
-MAINTAINER Schelte Bron otgw@tclcode.com
+LABEL org.opencontainers.image.authors="Schelte Bron <otgw@tclcode.com>"
 
 RUN apk add tzdata
 RUN mkdir -p /usr/local/bin; mkdir -p -m a=rwx /data /log
