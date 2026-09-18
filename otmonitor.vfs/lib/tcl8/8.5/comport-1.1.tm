@@ -48,7 +48,7 @@ proc comport::devsmart {} {
     # Find hot-pluggable devices
     foreach n [glob -nocomplain /dev/serial/by-path/*] {
 	set dev [file normalize [file join [file dirname $n] [file link $n]]]
-	if {[devcheck $dev]} {
+	if {$dev ni $rc && [devcheck $dev]} {
 	    lappend rc $dev
 	}
     }
