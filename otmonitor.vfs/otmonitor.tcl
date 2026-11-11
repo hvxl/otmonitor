@@ -1768,10 +1768,13 @@ proc filedata {endtime} {
     set base [clock add $endtime -6 hours]
     set last 0
     while {$connected && [gets $dev line] != -1} {
-	if {[binary scan $line $def ts frac otmsg] < 3} continue
+	set n [binary scan $line $def ts frac otmsg str]
+	if {$n < 3} continue
 	if {[scan $otmsg {%1[ABRT]%7x%x} src x7 x1] == 3} {
 	    # Strip any previous translation of the message
 	    set otmsg [string range $otmsg 0 8]
+	} elseif {$n == 4} {
+	    set otmsg $str
 	}
 	try {
 	    set sec [clock scan $ts -base $base -format $tsfmt]
@@ -1850,6 +1853,12 @@ proc fileanal {} {
 	26 {
 	    # 20131217-074805.135096813
 	    return [list a15xa9xa* %Y%m%d-%H%M%S]
+	}
+	35 {
+	    # Log by OTGW-Firmware from Robert vd Breemen
+	    # 22:47:47.902618 Boiler
+	    # 22:47:48.029522 Thermostat
+	    return [list a8xa6x20a*@18a* %T]
 	}
     }
 }
