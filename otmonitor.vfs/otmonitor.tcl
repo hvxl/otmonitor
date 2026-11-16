@@ -745,7 +745,7 @@ proc psdata {num value} {
 			if {![info exists gui(boilertemp2)]} return
 		    }
 		}
-		set data [expr {round(256 * $value)}]
+		set data [expr {round(256 * $value) & 0xffff}]
 	    } else {
 		return
 	    }
